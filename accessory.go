@@ -1,4 +1,4 @@
-package hkontrol
+package hkontroller
 
 type Accessory struct {
 	Id uint64     `json:"aid"`

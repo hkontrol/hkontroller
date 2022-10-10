@@ -1,4 +1,4 @@
-package hkontrol
+package hkontroller
 
 import (
 	"github.com/hkontrol/hkontroller/tlv8"

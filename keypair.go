@@ -1,4 +1,4 @@
-package hkontrol
+package hkontroller
 
 // KeyPair holds public and private key.
 type KeyPair struct {

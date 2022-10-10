@@ -1,4 +1,4 @@
-package hkontrol
+package hkontroller
 
 type Service struct {
 	Id      uint64            `json:"iid"`

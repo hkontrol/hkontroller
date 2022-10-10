@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	hkontrol "github.com/hkontrol/hkontroller"
+	"github.com/hkontrol/hkontroller"
 )
 
 func main() {
-	c, err := hkontrol.NewController(
-		hkontrol.NewFsStore("./.store"),
+	c, err := hkontroller.NewController(
+		hkontroller.NewFsStore("./.store"),
 		"hkontrol",
 	)
 	if err != nil {
@@ -18,7 +18,7 @@ func main() {
 	_ = c.LoadPairings()
 
 	c.StartDiscovering(
-		func(pairing *hkontrol.Pairing) {
+		func(pairing *hkontroller.Pairing) {
 			if pairing.Name != "CC:22:3D:E3:CE:65" {
 				return
 			}
@@ -48,13 +48,13 @@ func main() {
 					panic("nil accessory info service")
 				}
 				for _, c := range ai.Cs {
-					if *c.Type == hkontrol.Name {
+					if *c.Type == hkontroller.Name {
 						fmt.Println("   > ", c.Value)
 					}
 				}
 			}
 		},
-		func(pairing *hkontrol.Pairing) {
+		func(pairing *hkontroller.Pairing) {
 			fmt.Println("pairing disappeared")
 		},
 	)

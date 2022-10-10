@@ -1,4 +1,4 @@
-package hkontrol
+package hkontroller
 
 // Status codes for json communication.
 const (

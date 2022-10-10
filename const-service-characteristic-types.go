@@ -1,4 +1,4 @@
-package hkontrol
+package hkontroller
 
 type HapServiceType string
 

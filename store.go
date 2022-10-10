@@ -1,4 +1,4 @@
-package hkontrol
+package hkontroller
 
 // A Store lets you store key-value pairs.
 type Store interface {

@@ -1,4 +1,4 @@
-package hkontrol
+package hkontroller
 
 import (
 	"crypto/md5"
