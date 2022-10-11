@@ -28,6 +28,22 @@ type Pairing struct {
 	accs     *Accessories
 }
 
+// IsDiscovered indicates if device is found via multicast dns
+func (p *Pairing) IsDiscovered() bool {
+	return p.discovered
+}
+
+// IsPaired returns true if device is paired by this controller.
+// If another client is paired with device it will return false.
+func (p *Pairing) IsPaired() bool {
+	return p.paired
+}
+
+// IsVerified returns true if /pair-verify step was completed by this controller.
+func (p *Pairing) IsVerified() bool {
+	return p.verified
+}
+
 func (p *Pairing) DiscoverAccessories() error {
 
 	if !p.verified || p.httpc == nil {

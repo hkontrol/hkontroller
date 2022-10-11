@@ -70,7 +70,7 @@ func NewController(store Store, name string) (*Controller, error) {
 	}, nil
 }
 
-func (c *Controller) StartDiscovering(onDiscover func(*Pairing), onRemove func(pairing *Pairing)) {
+func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Pairing), onRemove func(*dnssd.BrowseEntry, *Pairing)) {
 	addFn := func(e dnssd.BrowseEntry) {
 		// CC:22:3D:E3:CE:65 example of id
 		id, ok := e.Text["id"]
@@ -141,7 +141,7 @@ func (c *Controller) StartDiscovering(onDiscover func(*Pairing), onRemove func(p
 		pairing.httpAddr = devHttpUrl
 
 		// end section tcp conn
-		onDiscover(pairing)
+		onDiscover(&e, pairing)
 	}
 
 	rmvFn := func(e dnssd.BrowseEntry) {
@@ -158,7 +158,7 @@ func (c *Controller) StartDiscovering(onDiscover func(*Pairing), onRemove func(p
 			pairing.discovered = false
 			pairing.verified = false
 			pairing.httpc = nil
-			onRemove(pairing)
+			onRemove(&e, pairing)
 		}
 	}
 

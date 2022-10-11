@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/brutella/dnssd"
 	"github.com/hkontrol/hkontroller"
 )
 
@@ -18,7 +19,7 @@ func main() {
 	_ = c.LoadPairings()
 
 	c.StartDiscovering(
-		func(pairing *hkontroller.Pairing) {
+		func(e *dnssd.BrowseEntry, pairing *hkontroller.Pairing) {
 			if pairing.Name != "CC:22:3D:E3:CE:65" {
 				return
 			}
@@ -69,7 +70,7 @@ func main() {
 				}
 			}
 		},
-		func(pairing *hkontroller.Pairing) {
+		func(e *dnssd.BrowseEntry, pairing *hkontroller.Pairing) {
 			fmt.Println("pairing disappeared")
 		},
 	)
