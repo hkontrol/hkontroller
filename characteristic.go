@@ -29,34 +29,34 @@ package hkontroller
 
 */
 
-type Characteristic struct {
-	Aid   uint64      `json:"aid"`
-	Iid   uint64      `json:"iid"`
-	Value interface{} `json:"value"`
+type CharacteristicDescription struct {
+	Aid         uint64                `json:"aid"`
+	Iid         uint64                `json:"iid"`
+	Type        HapCharacteristicType `json:"type"`
+	Value       interface{}           `json:"value"`
+	Permissions []string              `json:"perms"`
 
 	// optional values
-	Type        *HapCharacteristicType `json:"type,omitempty"`
-	Permissions []string               `json:"perms,omitempty"`
-	Status      *int                   `json:"status,omitempty"`
-	Events      *bool                  `json:"ev,omitempty"`
-	Format      *string                `json:"format,omitempty"`
-	Unit        *string                `json:"unit,omitempty"`
-	MinValue    interface{}            `json:"minValue,omitempty"`
-	MaxValue    interface{}            `json:"maxValue,omitempty"`
-	MinStep     interface{}            `json:"minStep,omitempty"`
-	MaxLen      *int                   `json:"maxLen,omitempty"`
-	ValidValues []int                  `json:"valid-values,omitempty"`
-	ValidRange  []int                  `json:"valid-values-range,omitempty"`
+	Format      *string     `json:"format,omitempty"`
+	Status      *int        `json:"status,omitempty"`
+	Events      *bool       `json:"ev,omitempty"`
+	Unit        *string     `json:"unit,omitempty"`
+	MinValue    interface{} `json:"minValue,omitempty"`
+	MaxValue    interface{} `json:"maxValue,omitempty"`
+	MinStep     interface{} `json:"minStep,omitempty"`
+	MaxLen      *int        `json:"maxLen,omitempty"`
+	ValidValues []int       `json:"valid-values,omitempty"`
+	ValidRange  []int       `json:"valid-values-range,omitempty"`
 }
 
-//type putCharacteristicData struct {
-//	Aid uint64 `json:"aid"`
-//	Iid uint64 `json:"iid"`
-//
-//	Value  interface{} `json:"value,omitempty"`
-//	Status *int        `json:"status,omitempty"`
-//	Events *bool       `json:"ev,omitempty"`
-//
-//	Remote   *bool `json:"remote,omitempty"`
-//	Response *bool `json:"r,omitempty"`
-//}
+type CharacteristicPut struct {
+	Aid uint64 `json:"aid"`
+	Iid uint64 `json:"iid"`
+
+	Value  interface{} `json:"value,omitempty"`
+	Status *int        `json:"status,omitempty"`
+	Events *bool       `json:"ev,omitempty"`
+
+	Remote   *bool `json:"remote,omitempty"`
+	Response *bool `json:"r,omitempty"`
+}

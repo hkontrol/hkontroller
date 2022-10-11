@@ -43,13 +43,28 @@ func main() {
 			fmt.Println("num of accs: ", len(p.GetAccessories()))
 
 			for _, a := range p.GetAccessories() {
-				ai := a.GetAccessoryInfoService()
+				ai := a.GetService(hkontroller.SType_AccessoryInfo)
 				if ai == nil {
 					panic("nil accessory info service")
 				}
-				for _, c := range ai.Cs {
-					if *c.Type == hkontroller.Name {
-						fmt.Println("   > ", c.Value)
+				cn := ai.GetCharacteristic(hkontroller.CType_Name)
+				if cn == nil {
+					panic("nil acc name")
+				}
+				fmt.Println("  > ", cn.Value)
+
+				lb := a.GetService(hkontroller.SType_LightBulb)
+				if lb != nil {
+					on := lb.GetCharacteristic(hkontroller.CType_On)
+					if on != nil {
+						val, ok := on.Value.(bool)
+						if ok {
+							fmt.Println("   >> putting lightbulb value: ", !val)
+							err := pairing.PutCharacteristic(a.Id, on.Iid, !val)
+							if err != nil {
+								fmt.Println("error putting char value: ", err)
+							}
+						}
 					}
 				}
 			}
