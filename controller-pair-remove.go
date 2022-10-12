@@ -22,6 +22,16 @@ type pairRemoveResPayload struct {
 }
 
 func (c *Controller) UnpairDevice(d *Device) error {
+	defer func() {
+		_ = c.st.DeletePairing(d.Id)
+		d.paired = false
+		d.verified = false
+		d.httpc = nil
+		c.mu.Lock()
+		c.devices[d.Id] = d
+		c.mu.Unlock()
+	}()
+
 	pl := pairRemoveReqPayload{
 		State:      M1,
 		Method:     MethodDeletePairing,
@@ -55,13 +65,6 @@ func (c *Controller) UnpairDevice(d *Device) error {
 	if err != nil {
 		return err
 	}
-	c.st.DeletePairing(d.Id)
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	d.httpc = nil
-	d.paired = false
-	c.devices[d.Id] = d
 
 	return nil
 }

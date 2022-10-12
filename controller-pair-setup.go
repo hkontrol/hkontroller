@@ -266,8 +266,6 @@ func (c *Controller) pairSetupM5(device *Device, clientSession *pairSetupClientS
 	device.pairing.Name = accessoryId
 	device.pairing.PublicKey = accessoryLTPK
 	//device.tcpAddr = devTcpAddr
-	device.paired = true
-	device.verified = false
 	return nil
 }
 
@@ -320,6 +318,7 @@ func (c *Controller) PairSetup(deviceId string, pin string) error {
 		return err
 	}
 	device.paired = true
+	device.verified = false
 
 	err = c.st.SavePairing(device.pairing)
 	if err != nil {
