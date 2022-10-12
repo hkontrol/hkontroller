@@ -191,6 +191,37 @@ func (c *Controller) SavePairings(s Store) error {
 	return nil
 }
 
+// GetPairedDevices returns list of devices that has been paired.
+// Connected or not.
+func (c *Controller) GetPairedDevices() []*Device {
+	var result []*Device
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, d := range c.devices {
+		if d.paired {
+			result = append(result, d)
+		}
+	}
+
+	return result
+}
+
+// GetVerifiedDevices returns list of devices with established encrypted session.
+func (c *Controller) GetVerifiedDevices() []*Device {
+	var result []*Device
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, d := range c.devices {
+		if d.verified {
+			result = append(result, d)
+		}
+	}
+
+	return result
+}
+
 func (c *Controller) LoadPairings() error {
 
 	c.mu.Lock()
