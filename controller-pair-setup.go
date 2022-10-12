@@ -34,7 +34,7 @@ type pairSetupM5EncPayload struct {
 	EncryptedData []byte `tlv8:"5"`
 }
 
-func (c *Controller) pairSetupM1(pairing *Device, pin string) (*pairSetupClientSession, error) {
+func (c *Controller) pairSetupM1(device *Device, pin string) (*pairSetupClientSession, error) {
 
 	m1 := pairSetupM1Payload{
 		State:  M1,
@@ -45,7 +45,7 @@ func (c *Controller) pairSetupM1(pairing *Device, pin string) (*pairSetupClientS
 		return nil, err
 	}
 
-	resp, err := pairing.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := device.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (c *Controller) pairSetupM1(pairing *Device, pin string) (*pairSetupClientS
 	return clientSession, nil
 }
 
-func (c *Controller) pairSetupM3(pairing *Device, clientSession *pairSetupClientSession) error {
+func (c *Controller) pairSetupM3(device *Device, clientSession *pairSetupClientSession) error {
 
 	// m3
 	m3 := pairSetupM3Payload{
@@ -98,7 +98,7 @@ func (c *Controller) pairSetupM3(pairing *Device, clientSession *pairSetupClient
 		return err
 	}
 
-	resp, err := pairing.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := device.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func (c *Controller) pairSetupM3(pairing *Device, clientSession *pairSetupClient
 	return nil
 }
 
-func (c *Controller) pairSetupM5(pairing *Device, clientSession *pairSetupClientSession) error {
+func (c *Controller) pairSetupM5(device *Device, clientSession *pairSetupClientSession) error {
 
 	err := clientSession.SetupEncryptionKey(
 		[]byte("Pair-Setup-Encrypt-Salt"),
@@ -193,7 +193,7 @@ func (c *Controller) pairSetupM5(pairing *Device, clientSession *pairSetupClient
 	if err != nil {
 		return err
 	}
-	resp, err := pairing.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := device.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -263,11 +263,11 @@ func (c *Controller) pairSetupM5(pairing *Device, clientSession *pairSetupClient
 		return errors.New("m6 sig not valid")
 	}
 
-	pairing.pairing.Name = accessoryId
-	pairing.pairing.PublicKey = accessoryLTPK
-	//pairing.tcpAddr = devTcpAddr
-	pairing.discovered = true
-	pairing.verified = false
+	device.pairing.Name = accessoryId
+	device.pairing.PublicKey = accessoryLTPK
+	//device.tcpAddr = devTcpAddr
+	device.paired = true
+	device.verified = false
 	return nil
 }
 
@@ -276,53 +276,52 @@ func (c *Controller) PairSetup(deviceId string, pin string) error {
 	defer c.mu.Unlock()
 
 	var ok bool
-	var pairing *Device
+	var device *Device
 
 	_, ok = c.mdnsDiscovered[deviceId]
 	if !ok {
 		return errors.New("device with given id not discovered")
 	}
-	if pairing, ok = c.devices[deviceId]; !ok {
-		fmt.Println("pairing not found")
-		return errors.New("pairing not found")
+	if device, ok = c.devices[deviceId]; !ok {
+		fmt.Println("device not found")
+		return errors.New("device not found")
 	}
 
-	if pairing.paired {
+	if device.paired {
 		fmt.Println("already paired!")
 		return nil
 	}
 
-	if pairing.httpc == nil {
+	if device.httpc == nil {
 		// tcp conn open
-		dial, err := net.Dial("tcp", pairing.tcpAddr)
+		dial, err := net.Dial("tcp", device.tcpAddr)
 		if err != nil {
 			return err
 		}
 		// connection, http client
 		cc := newConn(dial)
 
-		pairing.httpc = &http.Client{
+		device.httpc = &http.Client{
 			Transport: cc,
 		}
-		pairing.cc = cc
+		device.cc = cc
 	}
 
-	clientSession, err := c.pairSetupM1(pairing, pin)
+	clientSession, err := c.pairSetupM1(device, pin)
 	if err != nil {
 		return err
 	}
-	err = c.pairSetupM3(pairing, clientSession)
+	err = c.pairSetupM3(device, clientSession)
 	if err != nil {
 		return err
 	}
-	err = c.pairSetupM5(pairing, clientSession)
+	err = c.pairSetupM5(device, clientSession)
 	if err != nil {
 		return err
 	}
+	device.paired = true
 
-	//c.devices[accessoryId] = &pairing
-
-	err = c.st.SavePairing(pairing.pairing)
+	err = c.st.SavePairing(device.pairing)
 	if err != nil {
 		return err
 	}

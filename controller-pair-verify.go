@@ -32,7 +32,7 @@ func (c *Controller) PairVerify(devId string) error {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	pc, ok := c.devices[devId]
+	device, ok := c.devices[devId]
 	if !ok {
 		return errors.New("no devices accessory found")
 	}
@@ -41,19 +41,19 @@ func (c *Controller) PairVerify(devId string) error {
 		return errors.New("no dnssd entry found")
 	}
 
-	if pc.httpc == nil {
+	if device.httpc == nil {
 		// tcp conn open
-		dial, err := net.Dial("tcp", pc.tcpAddr)
+		dial, err := net.Dial("tcp", device.tcpAddr)
 		if err != nil {
 			return err
 		}
 		// connection, http client
 		cc := newConn(dial)
 
-		pc.httpc = &http.Client{
+		device.httpc = &http.Client{
 			Transport: cc,
 		}
-		pc.cc = cc
+		device.cc = cc
 	}
 
 	localPublic, localPrivate := curve25519.GenerateKeyPair()
@@ -69,7 +69,7 @@ func (c *Controller) PairVerify(devId string) error {
 	}
 
 	// send req
-	response, err := pc.httpc.Post("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	response, err := device.httpc.Post("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func (c *Controller) PairVerify(devId string) error {
 	material = append(material, m2dec.Identifier...)
 	material = append(material, localPublic[:]...)
 
-	ltpk := pc.pairing.PublicKey
+	ltpk := device.pairing.PublicKey
 
 	sigValid := ed25519.ValidateSignature(ltpk, material, m2dec.Signature)
 	if !sigValid {
@@ -184,7 +184,7 @@ func (c *Controller) PairVerify(devId string) error {
 		return err
 	}
 
-	response, err = pc.httpc.Post("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	response, err = device.httpc.Post("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -205,15 +205,15 @@ func (c *Controller) PairVerify(devId string) error {
 		return errors.New("m4err = " + strconv.FormatInt(int64(m4.Error), 10))
 	}
 
-	//pc.httpc.CloseIdleConnections()
+	//device.httpc.CloseIdleConnections()
 
-	ss, err := newControllerSession(sharedKey, *pc)
+	ss, err := newControllerSession(sharedKey, *device)
 	if err != nil {
 		return err
 	}
-	pc.ss = ss
-	pc.cc.UpgradeEnc(ss)
-	pc.verified = true
+	device.ss = ss
+	device.cc.UpgradeEnc(ss)
+	device.verified = true
 
 	return nil
 }

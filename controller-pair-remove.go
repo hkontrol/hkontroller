@@ -60,6 +60,7 @@ func (c *Controller) UnpairDevice(d *Device) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	d.httpc = nil
+	d.paired = false
 	c.devices[d.Id] = d
 
 	return nil
