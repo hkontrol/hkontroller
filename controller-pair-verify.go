@@ -27,11 +27,11 @@ type pairVerifyM3EncPayload struct {
 	EncryptedData []byte `tlv8:"5"`
 }
 
-func (c *Controller) PairVerifyM1(pairing *Pairing) error {
+func (c *Controller) PairVerifyM1(pairing *Device) error {
 	return nil
 }
 
-func (c *Controller) PairVerifyM3(pairing *Pairing) error {
+func (c *Controller) PairVerifyM3(pairing *Device) error {
 	return nil
 }
 
@@ -39,16 +39,16 @@ func (c *Controller) PairVerify(devId string) error {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	pairing, ok := c.pairings[devId]
+	pc, ok := c.devices[devId]
 	if !ok {
-		return errors.New("no pairings accessory found")
+		return errors.New("no devices accessory found")
 	}
 	_, ok = c.mdnsDiscovered[devId]
 	if !ok {
 		return errors.New("no dnssd entry found")
 	}
 
-	ep := fmt.Sprintf("%s/%s", pairing.httpAddr, "pair-verify")
+	ep := fmt.Sprintf("%s/%s", pc.httpAddr, "pair-verify")
 
 	localPublic, localPrivate := curve25519.GenerateKeyPair()
 
@@ -63,7 +63,7 @@ func (c *Controller) PairVerify(devId string) error {
 	}
 
 	// send req
-	response, err := pairing.httpc.Post(ep, HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	response, err := pc.httpc.Post(ep, HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func (c *Controller) PairVerify(devId string) error {
 	material = append(material, m2dec.Identifier...)
 	material = append(material, localPublic[:]...)
 
-	ltpk := pairing.PublicKey
+	ltpk := pc.pairing.PublicKey
 
 	sigValid := ed25519.ValidateSignature(ltpk, material, m2dec.Signature)
 	if !sigValid {
@@ -178,7 +178,7 @@ func (c *Controller) PairVerify(devId string) error {
 		return err
 	}
 
-	response, err = pairing.httpc.Post(ep, HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	response, err = pc.httpc.Post(ep, HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -199,15 +199,15 @@ func (c *Controller) PairVerify(devId string) error {
 		return errors.New("m4err = " + strconv.FormatInt(int64(m4.Error), 10))
 	}
 
-	//pairing.httpc.CloseIdleConnections()
+	//pc.httpc.CloseIdleConnections()
 
-	ss, err := newControllerSession(sharedKey, *pairing)
+	ss, err := newControllerSession(sharedKey, *pc)
 	if err != nil {
 		return err
 	}
-	pairing.ss = ss
-	pairing.cc.UpgradeEnc(ss)
-	pairing.verified = true
+	pc.ss = ss
+	pc.cc.UpgradeEnc(ss)
+	pc.verified = true
 
 	return nil
 }

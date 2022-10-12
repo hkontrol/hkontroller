@@ -46,9 +46,9 @@ const (
 )
 
 const (
-	// PermissionUser is the user permission for a pairings controller.
+	// PermissionUser is the user permission for a devices controller.
 	PermissionUser byte = 0x0
-	// PermissionAdmin is the administrator permission for a pairings controller.
+	// PermissionAdmin is the administrator permission for a devices controller.
 	PermissionAdmin byte = 0x1
 )
 

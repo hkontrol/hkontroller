@@ -33,7 +33,7 @@ type pairSetupM5EncPayload struct {
 	EncryptedData []byte `tlv8:"5"`
 }
 
-func (c *Controller) PairSetupM1(pairing *Pairing, pin string) (*pairSetupClientSession, error) {
+func (c *Controller) PairSetupM1(pairing *Device, pin string) (*pairSetupClientSession, error) {
 	fmt.Println("PairSetupM1")
 
 	ep := fmt.Sprintf("%s/%s", pairing.httpAddr, "pair-setup")
@@ -49,7 +49,6 @@ func (c *Controller) PairSetupM1(pairing *Pairing, pin string) (*pairSetupClient
 
 	fmt.Println("M1 sending post req")
 	resp, err := pairing.httpc.Post(ep, HTTPContentTypePairingTLV8, bytes.NewReader(b))
-	fmt.Println(resp, err)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +88,7 @@ func (c *Controller) PairSetupM1(pairing *Pairing, pin string) (*pairSetupClient
 	return clientSession, nil
 }
 
-func (c *Controller) PairSetupM3(pairing *Pairing, clientSession *pairSetupClientSession) error {
+func (c *Controller) PairSetupM3(pairing *Device, clientSession *pairSetupClientSession) error {
 	fmt.Println("PairSetupM3")
 
 	ep := fmt.Sprintf("%s/%s", pairing.httpAddr, "pair-setup")
@@ -141,7 +140,7 @@ func (c *Controller) PairSetupM3(pairing *Pairing, clientSession *pairSetupClien
 	return nil
 }
 
-func (c *Controller) PairSetupM5(pairing *Pairing, clientSession *pairSetupClientSession) error {
+func (c *Controller) PairSetupM5(pairing *Device, clientSession *pairSetupClientSession) error {
 	fmt.Println("PairSetupM5")
 	ep := fmt.Sprintf("%s/%s", pairing.httpAddr, "pair-setup")
 
@@ -272,8 +271,8 @@ func (c *Controller) PairSetupM5(pairing *Pairing, clientSession *pairSetupClien
 		return errors.New("m6 sig not valid")
 	}
 
-	pairing.Name = accessoryId
-	pairing.PublicKey = accessoryLTPK
+	pairing.pairing.Name = accessoryId
+	pairing.pairing.PublicKey = accessoryLTPK
 	//pairing.tcpAddr = devTcpAddr
 	pairing.discovered = true
 	pairing.verified = false
@@ -285,13 +284,13 @@ func (c *Controller) PairSetup(deviceId string, pin string) error {
 	defer c.mu.Unlock()
 
 	var ok bool
-	var pairing *Pairing
+	var pairing *Device
 
 	_, ok = c.mdnsDiscovered[deviceId]
 	if !ok {
 		return errors.New("device with given id not discovered")
 	}
-	if pairing, ok = c.pairings[deviceId]; !ok {
+	if pairing, ok = c.devices[deviceId]; !ok {
 		fmt.Println("pairing not found")
 		return errors.New("pairing not found")
 	}
@@ -314,9 +313,9 @@ func (c *Controller) PairSetup(deviceId string, pin string) error {
 		return err
 	}
 
-	//c.pairings[accessoryId] = &pairing
+	//c.devices[accessoryId] = &pairing
 
-	err = c.st.SavePairing(*pairing)
+	err = c.st.SavePairing(pairing.pairing)
 	if err != nil {
 		return err
 	}

@@ -143,7 +143,7 @@ func (st *storer) DeletePairing(name string) error {
 	return st.Delete(keyForPairingName(name))
 }
 
-// Pairings returns all known pairings.
+// Pairings returns all known devices.
 func (st *storer) Pairings() []Pairing {
 	var arr []Pairing
 	if ks, err := st.KeysWithSuffix(".pairing"); err == nil {
@@ -158,7 +158,7 @@ func (st *storer) Pairings() []Pairing {
 }
 
 // eneity is used in older versions to store public & private keys
-// of the accessory and pairings clients.
+// of the accessory and devices clients.
 // Use Keypair and Pairing instead.
 type entity struct {
 	Name       string

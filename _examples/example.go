@@ -19,20 +19,20 @@ func main() {
 	_ = c.LoadPairings()
 
 	c.StartDiscovering(
-		func(e *dnssd.BrowseEntry, pairing *hkontroller.Pairing) {
-			if pairing.Name != "CC:22:3D:E3:CE:65" {
+		func(e *dnssd.BrowseEntry, device *hkontroller.Device) {
+			if device.Id != "CC:22:3D:E3:CE:65" {
 				return
 			}
-			err = c.PairSetup(pairing.Name, "031-45-154")
+			err = c.PairSetup(device.Id, "031-45-154")
 			if err != nil {
 				panic(err)
 			}
-			err = c.PairVerify(pairing.Name)
+			err = c.PairVerify(device.Id)
 			if err != nil {
 				panic(err)
 			}
 
-			p := c.GetPairing(pairing.Name)
+			p := c.GetPairedDevice(device.Id)
 			if p == nil {
 				panic("no paired device found")
 			}
@@ -61,7 +61,7 @@ func main() {
 						val, ok := on.Value.(bool)
 						if ok {
 							fmt.Println("   >> putting lightbulb value: ", !val)
-							err := pairing.PutCharacteristic(a.Id, on.Iid, !val)
+							err := device.PutCharacteristic(a.Id, on.Iid, !val)
 							if err != nil {
 								fmt.Println("error putting char value: ", err)
 							}
@@ -69,9 +69,19 @@ func main() {
 					}
 				}
 			}
+
+			_, err := device.ListPairings()
+			if err != nil {
+				panic(err)
+			}
+			err = c.UnpairDevice(device)
+			if err != nil {
+				panic(err)
+			}
 		},
-		func(e *dnssd.BrowseEntry, pairing *hkontroller.Pairing) {
+		func(e *dnssd.BrowseEntry, d *hkontroller.Device) {
 			fmt.Println("pairing disappeared")
+			fmt.Println(d.DiscoverAccessories())
 		},
 	)
 

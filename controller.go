@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/brutella/dnssd"
-	"log"
 	"net"
 	"net/http"
 	"sort"
@@ -36,7 +35,7 @@ type Controller struct {
 	mu                sync.Mutex
 	cancelDiscovering context.CancelFunc
 	mdnsDiscovered    map[string]*dnssd.BrowseEntry
-	pairings          map[string]*Pairing
+	devices           map[string]*Device
 
 	st *storer
 
@@ -63,14 +62,14 @@ func NewController(store Store, name string) (*Controller, error) {
 		name:           name,
 		mu:             sync.Mutex{},
 		mdnsDiscovered: make(map[string]*dnssd.BrowseEntry),
-		pairings:       make(map[string]*Pairing),
+		devices:        make(map[string]*Device),
 		st:             &st,
 		localLTKP:      kpair.Public,
 		localLTSK:      kpair.Private,
 	}, nil
 }
 
-func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Pairing), onRemove func(*dnssd.BrowseEntry, *Pairing)) {
+func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Device), onRemove func(*dnssd.BrowseEntry, *Device)) {
 	addFn := func(e dnssd.BrowseEntry) {
 		// CC:22:3D:E3:CE:65 example of id
 		id, ok := e.Text["id"]
@@ -80,25 +79,26 @@ func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Pairi
 		c.mu.Lock()
 		c.mdnsDiscovered[id] = &e
 
-		pairing, ok := c.pairings[id]
+		pairing, ok := c.devices[id]
 		if !ok {
 			// not exist - init one
-			c.pairings[id] = &Pairing{
-				Name: id,
+			c.devices[id] = &Device{
+				Id: id,
+				pairing: Pairing{
+					Name: id,
+				},
 			}
-			pairing = c.pairings[id]
+			pairing = c.devices[id]
 		}
 		c.mu.Unlock()
 
 		pairing.discovered = true
-
 		if len(e.IPs) == 0 {
-			c.mu.Unlock()
 			return
 		}
 
 		sort.Slice(e.IPs, func(i, j int) bool {
-			return e.IPs[i].To4() == nil // currently ip6 first to check following
+			return e.IPs[i].To4() != nil // ip4 first
 		})
 
 		var devTcpAddr string
@@ -114,10 +114,8 @@ func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Pairi
 				devTcpAddr = fmt.Sprintf("%s:%d", ip.String(), e.Port)
 				devHttpUrl = fmt.Sprintf("http://%s", devTcpAddr)
 			}
-			log.Println("dialing ", devTcpAddr)
-			dial, err := net.DialTimeout("tcp", devTcpAddr, 10*time.Millisecond)
+			dial, err := net.DialTimeout("tcp", devTcpAddr, 1000*time.Millisecond)
 			if err != nil {
-				log.Println("tcpAddr: ", devTcpAddr, "error : ", err)
 				continue
 			}
 			// connection ok, close it and break the loop
@@ -151,7 +149,7 @@ func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Pairi
 		}
 		c.mu.Lock()
 		delete(c.mdnsDiscovered, id)
-		pairing, ok := c.pairings[id]
+		pairing, ok := c.devices[id]
 		c.mu.Unlock()
 
 		if ok {
@@ -176,7 +174,7 @@ func (c *Controller) SavePairings(s Store) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for k, v := range c.pairings {
+	for k, v := range c.devices {
 		key := fmt.Sprintf("pairing_%s", k)
 
 		val, err := json.Marshal(v)
@@ -200,18 +198,17 @@ func (c *Controller) LoadPairings() error {
 
 	pp := c.st.Pairings()
 	for _, p := range pp {
-		p.paired = true
-		c.pairings[p.Name] = &p
+		c.devices[p.Name] = &Device{Id: p.Name, pairing: p, paired: true}
 	}
 
 	return nil
 }
 
-func (c *Controller) GetPairing(deviceId string) *Pairing {
+func (c *Controller) GetPairedDevice(deviceId string) *Device {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	a, ok := c.pairings[deviceId]
+	a, ok := c.devices[deviceId]
 	if !ok {
 		return nil
 	}
