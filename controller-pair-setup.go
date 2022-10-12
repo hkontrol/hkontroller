@@ -33,10 +33,7 @@ type pairSetupM5EncPayload struct {
 	EncryptedData []byte `tlv8:"5"`
 }
 
-func (c *Controller) PairSetupM1(pairing *Device, pin string) (*pairSetupClientSession, error) {
-	fmt.Println("PairSetupM1")
-
-	ep := fmt.Sprintf("%s/%s", pairing.httpAddr, "pair-setup")
+func (c *Controller) pairSetupM1(pairing *Device, pin string) (*pairSetupClientSession, error) {
 
 	m1 := pairSetupM1Payload{
 		State:  M1,
@@ -47,8 +44,7 @@ func (c *Controller) PairSetupM1(pairing *Device, pin string) (*pairSetupClientS
 		return nil, err
 	}
 
-	fmt.Println("M1 sending post req")
-	resp, err := pairing.httpc.Post(ep, HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := pairing.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}
@@ -88,10 +84,7 @@ func (c *Controller) PairSetupM1(pairing *Device, pin string) (*pairSetupClientS
 	return clientSession, nil
 }
 
-func (c *Controller) PairSetupM3(pairing *Device, clientSession *pairSetupClientSession) error {
-	fmt.Println("PairSetupM3")
-
-	ep := fmt.Sprintf("%s/%s", pairing.httpAddr, "pair-setup")
+func (c *Controller) pairSetupM3(pairing *Device, clientSession *pairSetupClientSession) error {
 
 	// m3
 	m3 := pairSetupM3Payload{
@@ -104,7 +97,7 @@ func (c *Controller) PairSetupM3(pairing *Device, clientSession *pairSetupClient
 		return err
 	}
 
-	resp, err := pairing.httpc.Post(ep, HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := pairing.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -140,9 +133,7 @@ func (c *Controller) PairSetupM3(pairing *Device, clientSession *pairSetupClient
 	return nil
 }
 
-func (c *Controller) PairSetupM5(pairing *Device, clientSession *pairSetupClientSession) error {
-	fmt.Println("PairSetupM5")
-	ep := fmt.Sprintf("%s/%s", pairing.httpAddr, "pair-setup")
+func (c *Controller) pairSetupM5(pairing *Device, clientSession *pairSetupClientSession) error {
 
 	err := clientSession.SetupEncryptionKey(
 		[]byte("Pair-Setup-Encrypt-Salt"),
@@ -201,7 +192,7 @@ func (c *Controller) PairSetupM5(pairing *Device, clientSession *pairSetupClient
 	if err != nil {
 		return err
 	}
-	resp, err := pairing.httpc.Post(ep, HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := pairing.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -300,15 +291,15 @@ func (c *Controller) PairSetup(deviceId string, pin string) error {
 		return nil
 	}
 
-	clientSession, err := c.PairSetupM1(pairing, pin)
+	clientSession, err := c.pairSetupM1(pairing, pin)
 	if err != nil {
 		return err
 	}
-	err = c.PairSetupM3(pairing, clientSession)
+	err = c.pairSetupM3(pairing, clientSession)
 	if err != nil {
 		return err
 	}
-	err = c.PairSetupM5(pairing, clientSession)
+	err = c.pairSetupM5(pairing, clientSession)
 	if err != nil {
 		return err
 	}

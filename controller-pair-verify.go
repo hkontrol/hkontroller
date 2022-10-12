@@ -3,7 +3,6 @@ package hkontroller
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"github.com/hkontrol/hkontroller/chacha20poly1305"
 	"github.com/hkontrol/hkontroller/curve25519"
 	"github.com/hkontrol/hkontroller/ed25519"
@@ -48,8 +47,6 @@ func (c *Controller) PairVerify(devId string) error {
 		return errors.New("no dnssd entry found")
 	}
 
-	ep := fmt.Sprintf("%s/%s", pc.httpAddr, "pair-verify")
-
 	localPublic, localPrivate := curve25519.GenerateKeyPair()
 
 	m1 := pairVerifyM1Payload{
@@ -63,7 +60,7 @@ func (c *Controller) PairVerify(devId string) error {
 	}
 
 	// send req
-	response, err := pc.httpc.Post(ep, HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	response, err := pc.httpc.Post("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -178,7 +175,7 @@ func (c *Controller) PairVerify(devId string) error {
 		return err
 	}
 
-	response, err = pc.httpc.Post(ep, HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	response, err = pc.httpc.Post("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
