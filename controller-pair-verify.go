@@ -26,14 +26,6 @@ type pairVerifyM3EncPayload struct {
 	EncryptedData []byte `tlv8:"5"`
 }
 
-func (c *Controller) PairVerifyM1(pairing *Device) error {
-	return nil
-}
-
-func (c *Controller) PairVerifyM3(pairing *Device) error {
-	return nil
-}
-
 func (c *Controller) PairVerify(devId string) error {
 
 	c.mu.Lock()
