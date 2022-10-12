@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/brutella/dnssd"
 	"github.com/hkontrol/hkontroller"
+	"time"
 )
 
 func main() {
@@ -65,15 +66,38 @@ func main() {
 							if err != nil {
 								fmt.Println("error putting char value: ", err)
 							}
+
+							val, err := device.GetCharacteristic(a.Id, on.Iid)
+							if err != nil {
+								fmt.Println("error getting char value: ", err)
+							}
+							fmt.Println("got char value: ", val)
 						}
 					}
 				}
 			}
 
-			_, err := device.ListPairings()
+			keypair, err := hkontroller.GenerateKeyPair()
 			if err != nil {
 				panic(err)
 			}
+
+			err = c.PairAdd(device, hkontroller.Pairing{
+				Name:       "another device",
+				PublicKey:  keypair.Public,
+				Permission: 0,
+			})
+			if err != nil {
+				panic(err)
+			}
+
+			_, err = device.ListPairings()
+			if err != nil {
+				panic(err)
+			}
+
+			time.Sleep(time.Second)
+
 			err = c.UnpairDevice(device)
 			if err != nil {
 				panic(err)

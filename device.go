@@ -29,28 +29,28 @@ type Device struct {
 }
 
 // IsDiscovered indicates if device is advertised via multicast dns
-func (p *Device) IsDiscovered() bool {
-	return p.discovered
+func (d *Device) IsDiscovered() bool {
+	return d.discovered
 }
 
 // IsPaired returns true if device is paired by this controller.
 // If another client is paired with device it will return false.
-func (p *Device) IsPaired() bool {
-	return p.paired
+func (d *Device) IsPaired() bool {
+	return d.paired
 }
 
 // IsVerified returns true if /pair-verify step was completed by this controller.
-func (p *Device) IsVerified() bool {
-	return p.verified
+func (d *Device) IsVerified() bool {
+	return d.verified
 }
 
-func (p *Device) DiscoverAccessories() error {
+func (d *Device) DiscoverAccessories() error {
 
-	if !p.verified || p.httpc == nil {
+	if !d.verified || d.httpc == nil {
 		return errors.New("paired device not verified or not connected")
 	}
 
-	res, err := p.httpc.Get("/accessories")
+	res, err := d.httpc.Get("/accessories")
 	if err != nil {
 		return err
 	}
@@ -82,20 +82,47 @@ func (p *Device) DiscoverAccessories() error {
 		}
 	}
 
-	p.accs = &accs
+	d.accs = &accs
 
 	return nil
 }
 
-func (p *Device) GetAccessories() []*Accessory {
-	return p.accs.Accs
+func (d *Device) GetAccessories() []*Accessory {
+	return d.accs.Accs
 }
 
-func (p *Device) GetCharacteristic(aid uint64, cid uint64) (interface{}, error) {
-	return nil, nil
+func (d *Device) GetCharacteristic(aid uint64, cid uint64) (CharacteristicDescription, error) {
+	ep := fmt.Sprintf("/characteristics?id=%d.%d", aid, cid)
+	res, err := d.httpc.Get(ep)
+	if err != nil {
+		return CharacteristicDescription{}, err
+	}
+
+	all, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return CharacteristicDescription{}, err
+	}
+
+	type responsePayload struct {
+		Characteristics []CharacteristicDescription `json:"characteristics"`
+	}
+
+	var chrs responsePayload
+	err = json.Unmarshal(all, &chrs)
+	if err != nil {
+		return CharacteristicDescription{}, err
+	}
+
+	for _, c := range chrs.Characteristics {
+		if c.Aid == aid || c.Iid == cid {
+			return c, nil
+		}
+	}
+
+	return CharacteristicDescription{}, errors.New("wrong response")
 }
 
-func (p *Device) PutCharacteristic(aid uint64, cid uint64, val interface{}) error {
+func (d *Device) PutCharacteristic(aid uint64, cid uint64, val interface{}) error {
 
 	/***
 	PUT /characteristics HTTP/1.1
@@ -128,7 +155,7 @@ func (p *Device) PutCharacteristic(aid uint64, cid uint64, val interface{}) erro
 		return err
 	}
 
-	_, err = p.httpc.Do(req)
+	_, err = d.httpc.Do(req)
 	if err != nil {
 		return err
 	}

@@ -43,6 +43,10 @@ func generateKeyPair() (KeyPair, error) {
 	return KeyPair{public[:], private[:]}, err
 }
 
+func GenerateKeyPair() (KeyPair, error) {
+	return generateKeyPair()
+}
+
 // randomHex returns a random hex string.
 func randHex() string {
 	var b [16]byte

@@ -18,6 +18,8 @@ type pairingPayload struct {
 	Permission byte   `tlv8:"11"`
 }
 
+// ListPairings should list all controllers of device.
+// Currently doesn't work as expected
 func (d *Device) ListPairings() ([]Pairing, error) {
 
 	pl := pairListReqPayload{
@@ -48,8 +50,7 @@ func (d *Device) ListPairings() ([]Pairing, error) {
 	err = tlv8.Unmarshal(all, &m2)
 	// if one controller is paired, there is no need for []pairingPayload
 	// but what if there is multiple pairings?
-
-	fmt.Println(m2)
+	// tlv8.Unmarshal do creates empty slice
 
 	if err != nil {
 		return nil, err
