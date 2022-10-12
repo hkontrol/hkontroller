@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/brutella/dnssd"
 	"net"
-	"net/http"
 	"sort"
 	"sync"
 	"time"
@@ -123,18 +122,6 @@ func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Devic
 			break
 		}
 
-		// tcp conn open
-		dial, err := net.Dial("tcp", devTcpAddr)
-		if err != nil {
-			return
-		}
-		// connection, http client
-		cc := newConn(dial)
-
-		pairing.httpc = &http.Client{
-			Transport: cc,
-		}
-		pairing.cc = cc
 		pairing.tcpAddr = devTcpAddr
 		pairing.httpAddr = devHttpUrl
 

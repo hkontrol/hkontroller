@@ -32,9 +32,7 @@ func (c *Controller) UnpairDevice(d *Device) error {
 		return err
 	}
 
-	ep := fmt.Sprintf("%s/%s", d.httpAddr, "pairings")
-
-	resp, err := d.httpc.Post(ep, HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := d.httpc.Post("/pairings", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -57,12 +55,12 @@ func (c *Controller) UnpairDevice(d *Device) error {
 	if err != nil {
 		return err
 	}
+	c.st.DeletePairing(d.Id)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.devices[d.Id].paired = false
-	c.devices[d.Id].verified = false
-	c.st.DeletePairing(d.Id)
+	d.httpc = nil
+	c.devices[d.Id] = d
 
 	return nil
 }

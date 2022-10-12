@@ -9,6 +9,8 @@ import (
 	"github.com/hkontrol/hkontroller/hkdf"
 	"github.com/hkontrol/hkontroller/tlv8"
 	"io/ioutil"
+	"net"
+	"net/http"
 	"strconv"
 )
 
@@ -37,6 +39,21 @@ func (c *Controller) PairVerify(devId string) error {
 	_, ok = c.mdnsDiscovered[devId]
 	if !ok {
 		return errors.New("no dnssd entry found")
+	}
+
+	if pc.httpc == nil {
+		// tcp conn open
+		dial, err := net.Dial("tcp", pc.tcpAddr)
+		if err != nil {
+			return err
+		}
+		// connection, http client
+		cc := newConn(dial)
+
+		pc.httpc = &http.Client{
+			Transport: cc,
+		}
+		pc.cc = cc
 	}
 
 	localPublic, localPrivate := curve25519.GenerateKeyPair()

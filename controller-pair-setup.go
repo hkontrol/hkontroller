@@ -9,6 +9,7 @@ import (
 	"github.com/hkontrol/hkontroller/hkdf"
 	"github.com/hkontrol/hkontroller/tlv8"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strconv"
 )
@@ -289,6 +290,21 @@ func (c *Controller) PairSetup(deviceId string, pin string) error {
 	if pairing.paired {
 		fmt.Println("already paired!")
 		return nil
+	}
+
+	if pairing.httpc == nil {
+		// tcp conn open
+		dial, err := net.Dial("tcp", pairing.tcpAddr)
+		if err != nil {
+			return err
+		}
+		// connection, http client
+		cc := newConn(dial)
+
+		pairing.httpc = &http.Client{
+			Transport: cc,
+		}
+		pairing.cc = cc
 	}
 
 	clientSession, err := c.pairSetupM1(pairing, pin)

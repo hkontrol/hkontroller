@@ -97,11 +97,28 @@ func main() {
 			}
 
 			time.Sleep(time.Second)
+			err = c.UnpairDevice(device)
+			if err != nil {
+				panic(err)
+			}
+
+			// one more try
+			fmt.Println("-- one more try")
+			err = c.PairSetup(device.Id, "031-45-154")
+			if err != nil {
+				panic(err)
+			}
+			err = c.PairVerify(device.Id)
+			if err != nil {
+				panic(err)
+			}
 
 			err = c.UnpairDevice(device)
 			if err != nil {
 				panic(err)
 			}
+			fmt.Println("-- here comes success")
+
 		},
 		func(e *dnssd.BrowseEntry, d *hkontroller.Device) {
 			fmt.Println("pairing disappeared")
