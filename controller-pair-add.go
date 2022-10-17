@@ -24,7 +24,14 @@ type pairAddResPayload struct {
 }
 
 // PairAdd serves to pair another controller.
-func (c *Controller) PairAdd(d *Device, p Pairing) error {
+func (c *Controller) PairAdd(devId string, p Pairing) error {
+	c.mu.Lock()
+	d, ok := c.devices[devId]
+	c.mu.Unlock()
+	if !ok {
+		return errors.New("no device found")
+	}
+
 	pl := pairAddReqPayload{
 		State:       M1,
 		Method:      MethodAddPairing,
