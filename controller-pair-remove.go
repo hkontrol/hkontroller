@@ -27,7 +27,7 @@ func (c *Controller) UnpairDevice(devId string) error {
 	d, ok := c.devices[devId]
 	c.mu.Unlock()
 	if !ok {
-		return errors.New("no devices accessory found")
+		return errors.New("no device found")
 	}
 
 	defer func() {
