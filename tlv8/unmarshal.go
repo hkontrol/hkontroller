@@ -2,11 +2,10 @@ package tlv8
 
 import (
 	"io"
-	"io/ioutil"
 )
 
 func UnmarshalReader(r io.Reader, v interface{}) error {
-	b, err := ioutil.ReadAll(r)
+	b, err := io.ReadAll(r)
 	if err != nil {
 		return err
 	}

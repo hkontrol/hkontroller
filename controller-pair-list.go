@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/hkontrol/hkontroller/tlv8"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -42,7 +42,7 @@ func (d *Device) ListPairings() ([]Pairing, error) {
 	}
 	res := resp.Body
 	defer res.Close()
-	all, err := ioutil.ReadAll(res)
+	all, err := io.ReadAll(res)
 	if err != nil {
 		return nil, err
 	}

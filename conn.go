@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net"
 )
 
@@ -56,7 +55,7 @@ func (c *conn) Write(b []byte) (int, error) {
 		return 0, err
 	}
 
-	encB, err := ioutil.ReadAll(enc)
+	encB, err := io.ReadAll(enc)
 	n, err := c.Conn.Write(encB)
 
 	return n, err

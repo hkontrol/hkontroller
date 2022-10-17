@@ -8,7 +8,7 @@ import (
 	"github.com/hkontrol/hkontroller/ed25519"
 	"github.com/hkontrol/hkontroller/hkdf"
 	"github.com/hkontrol/hkontroller/tlv8"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -54,7 +54,7 @@ func (c *Controller) pairSetupM1(device *Device, pin string) (*pairSetupClientSe
 	}
 	res := resp.Body
 	defer res.Close()
-	all, err := ioutil.ReadAll(res)
+	all, err := io.ReadAll(res)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (c *Controller) pairSetupM3(device *Device, clientSession *pairSetupClientS
 	}
 	res := resp.Body
 	defer res.Close()
-	all, err := ioutil.ReadAll(res)
+	all, err := io.ReadAll(res)
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func (c *Controller) pairSetupM5(device *Device, clientSession *pairSetupClientS
 	}
 	res := resp.Body
 	defer res.Close()
-	all, err := ioutil.ReadAll(res)
+	all, err := io.ReadAll(res)
 	if err != nil {
 		return err
 	}

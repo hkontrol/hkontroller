@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hkontrol/hkontroller/tlv8"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 )
@@ -46,7 +46,7 @@ func (c *Controller) PairAdd(d *Device, p Pairing) error {
 	}
 	res := resp.Body
 	defer res.Close()
-	all, err := ioutil.ReadAll(res)
+	all, err := io.ReadAll(res)
 	if err != nil {
 		return err
 	}

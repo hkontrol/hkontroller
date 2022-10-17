@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -54,7 +54,7 @@ func (d *Device) DiscoverAccessories() error {
 	if err != nil {
 		return err
 	}
-	all, err := ioutil.ReadAll(res.Body)
+	all, err := io.ReadAll(res.Body)
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func (d *Device) GetCharacteristic(aid uint64, cid uint64) (CharacteristicDescri
 		return CharacteristicDescription{}, err
 	}
 
-	all, err := ioutil.ReadAll(res.Body)
+	all, err := io.ReadAll(res.Body)
 	if err != nil {
 		return CharacteristicDescription{}, err
 	}

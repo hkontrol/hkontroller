@@ -8,7 +8,7 @@ import (
 	"github.com/hkontrol/hkontroller/ed25519"
 	"github.com/hkontrol/hkontroller/hkdf"
 	"github.com/hkontrol/hkontroller/tlv8"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -75,7 +75,7 @@ func (c *Controller) PairVerify(devId string) error {
 	}
 	res := response.Body
 	defer res.Close()
-	all, err := ioutil.ReadAll(res)
+	all, err := io.ReadAll(res)
 	if err != nil {
 		return err
 	}
@@ -191,7 +191,7 @@ func (c *Controller) PairVerify(devId string) error {
 	res = response.Body
 
 	defer res.Close()
-	all, err = ioutil.ReadAll(res)
+	all, err = io.ReadAll(res)
 	if err != nil {
 		return err
 	}
