@@ -21,7 +21,7 @@ func main() {
 
 	c.StartDiscovering(
 		func(e *dnssd.BrowseEntry, device *hkontroller.Device) {
-			if device.Id != "CC:22:3D:E3:CE:65" {
+			if device.Id != "CC:22:3D:E3:CE:30" {
 				return
 			}
 			err = c.PairSetup(device.Id, "031-45-154")
@@ -82,7 +82,7 @@ func main() {
 				panic(err)
 			}
 
-			err = c.PairAdd(device, hkontroller.Pairing{
+			err = c.PairAdd(device.Id, hkontroller.Pairing{
 				Name:       "another device",
 				PublicKey:  keypair.Public,
 				Permission: 0,
@@ -91,13 +91,14 @@ func main() {
 				panic(err)
 			}
 
-			_, err = device.ListPairings()
+			pps, err := device.ListPairings()
 			if err != nil {
 				panic(err)
 			}
+			fmt.Println(pps)
 
 			time.Sleep(time.Second)
-			err = c.UnpairDevice(device)
+			err = c.UnpairDevice(device.Id)
 			if err != nil {
 				panic(err)
 			}
@@ -113,7 +114,7 @@ func main() {
 				panic(err)
 			}
 
-			err = c.UnpairDevice(device)
+			err = c.UnpairDevice(device.Id)
 			if err != nil {
 				panic(err)
 			}
