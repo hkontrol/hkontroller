@@ -2,6 +2,8 @@ package hkontroller
 
 import (
 	"bytes"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/hkontrol/hkontroller/tlv8"
 	"io"
@@ -19,7 +21,7 @@ type pairingPayload struct {
 }
 
 // ListPairings should list all controllers of device.
-// Currently doesn't work as expected
+// Currently, doesn't work as expected
 func (d *Device) ListPairings() ([]Pairing, error) {
 
 	pl := pairListReqPayload{
@@ -31,9 +33,7 @@ func (d *Device) ListPairings() ([]Pairing, error) {
 		return nil, err
 	}
 
-	ep := fmt.Sprintf("%s/%s", d.httpAddr, "pairings")
-
-	resp, err := d.httpc.Post(ep, HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := d.httpc.Post("/pairings", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}
@@ -42,22 +42,77 @@ func (d *Device) ListPairings() ([]Pairing, error) {
 	}
 	res := resp.Body
 	defer res.Close()
-	all, err := io.ReadAll(res)
+
+	//
+	////l := len(all)
+	////o := 0
+	var tag byte
+	err = binary.Read(res, binary.BigEndian, &tag)
 	if err != nil {
 		return nil, err
 	}
-	m2 := pairingPayload{} // TODO examine
-	err = tlv8.Unmarshal(all, &m2)
-	// if one controller is paired, there is no need for []pairingPayload
-	// but what if there is multiple pairings?
-	// tlv8.Unmarshal do creates empty slice
-
+	var leng byte
+	err = binary.Read(res, binary.BigEndian, &leng)
 	if err != nil {
 		return nil, err
+	}
+	val := make([]byte, leng)
+	err = binary.Read(res, binary.BigEndian, &val)
+	if err != nil {
+		return nil, err
+	}
+
+	if tag != 6 && val[0] != M2 {
+		return nil, errors.New("wrong response")
 	}
 
 	var result []Pairing
-	result = append(result, Pairing{Name: m2.Identifier, PublicKey: m2.PublicKey, Permission: m2.Permission})
+
+	var pp Pairing
+	for err == nil {
+		var tag byte
+		err = binary.Read(res, binary.BigEndian, &tag)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		var leng byte
+		err = binary.Read(res, binary.BigEndian, &leng)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+
+		if tag == 0xff {
+			// separator
+			result = append(result, pp)
+			pp = Pairing{}
+			continue
+		}
+		val := make([]byte, leng)
+		err = binary.Read(res, binary.BigEndian, &val)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		if tag == 1 {
+			pp.Name = string(val)
+		} else if tag == 3 {
+			pp.PublicKey = val
+		} else if tag == 11 {
+			pp.Permission = val[0]
+		}
+	}
+	if err == io.EOF {
+		result = append(result, pp)
+		err = nil
+	}
 
 	return result, nil
 }
