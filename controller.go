@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/brutella/dnssd"
 	"net"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/brutella/dnssd"
 )
 
 type pairSetupPayload struct {
@@ -46,9 +47,9 @@ func NewController(store Store, name string) (*Controller, error) {
 
 	st := storer{store}
 
-	kpair, err := st.KeyPair()
+	keypair, err := st.KeyPair()
 	if err != nil {
-		keypair, err := generateKeyPair()
+		keypair, err = generateKeyPair()
 		if err != nil {
 			return nil, fmt.Errorf("generating keypair failed: %v", err)
 		}
@@ -63,8 +64,8 @@ func NewController(store Store, name string) (*Controller, error) {
 		mdnsDiscovered: make(map[string]*dnssd.BrowseEntry),
 		devices:        make(map[string]*Device),
 		st:             &st,
-		localLTKP:      kpair.Public,
-		localLTSK:      kpair.Private,
+		localLTKP:      keypair.Public,
+		localLTSK:      keypair.Private,
 	}, nil
 }
 
