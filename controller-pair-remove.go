@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hkontrol/hkontroller/tlv8"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 )
@@ -21,9 +21,17 @@ type pairRemoveResPayload struct {
 	Error byte `tlv8:"7"`
 }
 
-func (c *Controller) UnpairDevice(d *Device) error {
+func (c *Controller) UnpairDevice(devId string) error {
+
+	c.mu.Lock()
+	d, ok := c.devices[devId]
+	c.mu.Unlock()
+	if !ok {
+		return errors.New("no devices accessory found")
+	}
+
 	defer func() {
-		_ = c.st.DeletePairing(d.Id)
+		_ = c.st.DeletePairing(devId)
 		d.paired = false
 		d.verified = false
 		d.httpc = nil
@@ -51,7 +59,7 @@ func (c *Controller) UnpairDevice(d *Device) error {
 	}
 	res := resp.Body
 	defer res.Close()
-	all, err := ioutil.ReadAll(res)
+	all, err := io.ReadAll(res)
 	if err != nil {
 		return err
 	}
