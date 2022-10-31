@@ -21,7 +21,11 @@ func (s *ServiceDescription) GetCharacteristic(characteristicType HapCharacteris
 	})
 
 	if idx > -1 && idx < len(s.Cs) {
-		return s.Cs[idx]
+		if s.Cs[idx].Type == characteristicType {
+			return s.Cs[idx]
+		} else {
+			return nil
+		}
 	}
 
 	return nil

@@ -21,7 +21,11 @@ func (a *Accessory) GetService(serviceType HapServiceType) *ServiceDescription {
 	})
 
 	if idx > -1 && idx < len(a.Ss) {
-		return a.Ss[idx]
+		if a.Ss[idx].Type == serviceType {
+			return a.Ss[idx]
+		} else {
+			return nil
+		}
 	}
 
 	return nil
