@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/brutella/dnssd"
 	"github.com/hkontrol/hkontroller"
@@ -21,9 +22,10 @@ func main() {
 
 	c.StartDiscovering(
 		func(e *dnssd.BrowseEntry, device *hkontroller.Device) {
-			if device.Id != "CC:22:3D:E3:CE:30" {
-				return
-			}
+			fmt.Println("discovered ", device.Id)
+			//if device.Id != "28:EF:D2:66:94:C2" {
+			//	return
+			//}
 			err = c.PairSetup(device.Id, "031-45-154")
 			if err != nil {
 				panic(err)
@@ -55,11 +57,32 @@ func main() {
 				}
 				fmt.Println("  > ", cn.Value)
 
-				lb := a.GetService(hkontroller.SType_LightBulb)
+				th := a.GetService(hkontroller.SType_Thermostat)
+				if th != nil {
+					ts := th.GetCharacteristic(hkontroller.CType_CurrentTemperature)
+					if ts != nil {
+						val, ok := ts.Value.(float64)
+						if !ok {
+							return
+						}
+						fmt.Println("current temp: ", val)
+						err = device.SubscribeToEvents(context.TODO(), a.Id, ts.Iid)
+						fmt.Println("subscribe result: ", err)
+					}
+				}
+
+				lb := a.GetService(hkontroller.SType_Switch)
 				if lb != nil {
 					on := lb.GetCharacteristic(hkontroller.CType_On)
 					if on != nil {
 						val, ok := on.Value.(bool)
+						if !ok {
+							var valFloat float64
+							valFloat, ok = on.Value.(float64)
+							if ok {
+								val = valFloat > 0
+							}
+						}
 						if ok {
 							fmt.Println("   >> putting lightbulb value: ", !val)
 							err := device.PutCharacteristic(a.Id, on.Iid, !val)
@@ -72,11 +95,24 @@ func main() {
 								fmt.Println("error getting char value: ", err)
 							}
 							fmt.Println("got char value: ", val)
+
+							err = device.SubscribeToEvents(context.TODO(), a.Id, on.Iid)
+							fmt.Println("subscribe result: ", err)
+
+							time.Sleep(1 * time.Second)
+
+							val, err = device.GetCharacteristic(a.Id, on.Iid)
+							if err != nil {
+								fmt.Println("error getting char value: ", err)
+							}
+							fmt.Println("got char value: ", val)
+
 						}
 					}
 				}
 			}
 
+			time.Sleep(15 * time.Minute)
 			keypair, err := hkontroller.GenerateKeyPair()
 			if err != nil {
 				panic(err)
@@ -97,7 +133,6 @@ func main() {
 			}
 			fmt.Println(pps)
 
-			time.Sleep(time.Second)
 			err = c.UnpairDevice(device.Id)
 			if err != nil {
 				panic(err)

@@ -63,6 +63,7 @@ func (c *Controller) UnpairDevice(devId string) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("unpairResponse: ", string(all))
 	m2 := pairRemoveResPayload{}
 	err = tlv8.Unmarshal(all, &m2)
 

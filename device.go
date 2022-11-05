@@ -2,6 +2,7 @@ package hkontroller
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -144,6 +145,48 @@ func (d *Device) PutCharacteristic(aid uint64, cid uint64, val interface{}) erro
 	}
 
 	c := putPayload{Cs: []CharacteristicPut{{Aid: aid, Iid: cid, Value: val}}}
+	b, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	fmt.Println("marshalled: ", string(b))
+
+	req, err := http.NewRequest("PUT", "/characteristics", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	_, err = d.httpc.Do(req)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *Device) SubscribeToEvents(ctx context.Context, aid uint64, cid uint64) error {
+
+	/***
+	PUT /characteristics HTTP/1.1
+	Host: lights.local:12345
+	Content-Type: application/hap+json
+	Content-Length: <length>
+	{
+	    ”characteristics” :
+	    [{
+	        ”aid” : 2,
+	        ”iid” : 8,
+	        "ev": true
+	    },...]
+	}
+	 ***/
+
+	type putPayload struct {
+		Cs []CharacteristicPut `json:"characteristics"`
+	}
+
+	ev := true
+	c := putPayload{Cs: []CharacteristicPut{{Aid: aid, Iid: cid, Events: &ev}}}
 	b, err := json.Marshal(c)
 	if err != nil {
 		return err

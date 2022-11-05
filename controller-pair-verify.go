@@ -215,5 +215,7 @@ func (c *Controller) PairVerify(devId string) error {
 	device.cc.UpgradeEnc(ss)
 	device.verified = true
 
+	device.cc.StartBackgroundRead()
+
 	return nil
 }

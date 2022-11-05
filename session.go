@@ -126,7 +126,7 @@ func (s *session) Decrypt(r io.Reader) (io.Reader, error) {
 		s.decryptCount++
 
 		lengthBytes := make([]byte, 2)
-		binary.LittleEndian.PutUint16(lengthBytes, uint16(length))
+		binary.LittleEndian.PutUint16(lengthBytes, length)
 
 		decrypted, err := chacha20poly1305.DecryptAndVerify(s.decryptKey[:], nonce[:], b, mac, lengthBytes)
 

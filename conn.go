@@ -1,6 +1,7 @@
 package hkontroller
 
 import (
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -10,6 +11,8 @@ import (
 	"io"
 	"net"
 )
+
+type EventCallback func(response *http.Response)
 
 type conn struct {
 	net.Conn
@@ -24,13 +27,27 @@ type conn struct {
 	ss  *session
 
 	readBuf io.Reader
+
+	inBackground bool
+
+	emu      sync.Mutex
+	onEvent  EventCallback       // EVENT callback, when characteristic value updated
+	response chan *http.Response // assume that one request wants one response
 }
 
 func newConn(c net.Conn) *conn {
-	return &conn{
-		Conn: c,
-		smu:  sync.Mutex{},
+	cc := &conn{
+		Conn:     c,
+		smu:      sync.Mutex{},
+		emu:      sync.Mutex{},
+		response: make(chan *http.Response),
 	}
+
+	return cc
+}
+
+func (c *conn) SetEventCallback(cb EventCallback) {
+	c.onEvent = cb
 }
 
 func (c *conn) UpgradeEnc(s *session) {
@@ -98,12 +115,134 @@ func (c *conn) Read(b []byte) (int, error) {
 	return n, err
 }
 
+// to transform EVENT into valid HTTP response
+type eventTransformer struct {
+	rr io.Reader
+	cc *conn
+
+	skipped     bool // indicates that rr.ReadWithTransform("EVENT") was performed
+	transformed bool // indicates that EVENT proto was replaced with HTTP
+	readIndex   int
+}
+
+func newEventTransformer(cc *conn, r io.Reader) *eventTransformer {
+
+	return &eventTransformer{
+		rr: r,
+		cc: cc,
+	}
+}
+
+// Read reads data and in case of EVENT it replaces EVENT header
+// so http.ReadResponse may be invoked
+func (t *eventTransformer) Read(p []byte) (n int, err error) {
+
+	if !t.skipped {
+		toReplace := make([]byte, len("EVENT"))
+		n := 0
+		for n < len("EVENT") {
+			k, err := t.rr.Read(toReplace[n:])
+			if err != nil {
+				return 0, err
+			}
+			n += k
+		}
+		t.skipped = true
+	}
+
+	if !t.transformed {
+		d := []byte("HTTP")
+		n = copy(p, d[t.readIndex:])
+		t.readIndex += n
+		if t.readIndex >= len(d) {
+			t.transformed = true
+			return n, nil
+		}
+	}
+
+	return t.rr.Read(p)
+}
+
 // RoundTrip implementation to be able to use with http.Client
+
+func (c *conn) StartBackgroundRead() {
+	go c.backgroundRead()
+	c.inBackground = true
+}
+
+func (c *conn) backgroundRead() {
+
+	rd := bufio.NewReader(c)
+
+	for {
+		b, err := rd.Peek(5) // len of EVENT string
+		if err != nil {
+			fmt.Println(err)
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			continue
+		}
+		if string(b) == "EVENT" {
+			rt := newEventTransformer(c, rd)
+			rb := bufio.NewReader(rt)
+
+			res, err := http.ReadResponse(rb, nil)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+
+			all, err := io.ReadAll(res.Body)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+
+			// then assign new res.Body
+			res.Body = io.NopCloser(bytes.NewReader(all))
+
+			if c.onEvent != nil {
+				c.onEvent(res)
+			}
+
+			continue
+		} else {
+			res, err := http.ReadResponse(rd, nil)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			// ReadAll here because if response is chunked then on next loop there will be error
+			all, err := io.ReadAll(res.Body)
+			if err != nil {
+				fmt.Println("err: ", err)
+				return
+			}
+
+			// then assign new res.Body
+			res.Body = io.NopCloser(bytes.NewReader(all))
+
+			c.response <- res
+		}
+	}
+}
+
 func (c *conn) RoundTrip(req *http.Request) (*http.Response, error) {
 	err := req.Write(c)
 	if err != nil {
 		return nil, err
 	}
+	if c.inBackground {
+		res := <-c.response
+		return res, nil
+	}
+
 	rd := bufio.NewReader(c)
-	return http.ReadResponse(rd, req)
+	res, err := http.ReadResponse(rd, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
