@@ -12,7 +12,7 @@ import (
 	"net"
 )
 
-type EventCallback func(response *http.Response)
+const eventHeader = "EVENT"
 
 type conn struct {
 	net.Conn
@@ -31,8 +31,8 @@ type conn struct {
 	inBackground bool
 
 	emu      sync.Mutex
-	onEvent  EventCallback       // EVENT callback, when characteristic value updated
-	response chan *http.Response // assume that one request wants one response
+	onEvent  func(*http.Response) // EVENT callback, when characteristic value updated
+	response chan *http.Response  // assume that one request wants one response
 }
 
 func newConn(c net.Conn) *conn {
@@ -46,7 +46,7 @@ func newConn(c net.Conn) *conn {
 	return cc
 }
 
-func (c *conn) SetEventCallback(cb EventCallback) {
+func (c *conn) SetEventCallback(cb func(*http.Response)) {
 	c.onEvent = cb
 }
 
@@ -138,9 +138,9 @@ func newEventTransformer(cc *conn, r io.Reader) *eventTransformer {
 func (t *eventTransformer) Read(p []byte) (n int, err error) {
 
 	if !t.skipped {
-		toReplace := make([]byte, len("EVENT"))
+		toReplace := make([]byte, len(eventHeader))
 		n := 0
-		for n < len("EVENT") {
+		for n < len(eventHeader) {
 			k, err := t.rr.Read(toReplace[n:])
 			if err != nil {
 				return 0, err
@@ -183,7 +183,7 @@ func (c *conn) backgroundRead() {
 			}
 			continue
 		}
-		if string(b) == "EVENT" {
+		if string(b) == eventHeader {
 			rt := newEventTransformer(c, rd)
 			rb := bufio.NewReader(rt)
 

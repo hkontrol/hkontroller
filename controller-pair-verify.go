@@ -10,7 +10,6 @@ import (
 	"github.com/hkontrol/hkontroller/tlv8"
 	"io"
 	"net"
-	"net/http"
 	"strconv"
 )
 
@@ -49,11 +48,7 @@ func (c *Controller) PairVerify(devId string) error {
 		}
 		// connection, http client
 		cc := newConn(dial)
-
-		device.httpc = &http.Client{
-			Transport: cc,
-		}
-		device.cc = cc
+		device.SetConnection(cc)
 	}
 
 	localPublic, localPrivate := curve25519.GenerateKeyPair()

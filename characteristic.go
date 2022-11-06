@@ -60,3 +60,7 @@ type CharacteristicPut struct {
 	Remote   *bool `json:"remote,omitempty"`
 	Response *bool `json:"r,omitempty"`
 }
+
+type CharacteristicEvent struct {
+	Characteristics []CharacteristicDescription `json:"characteristics"`
+}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"github.com/brutella/dnssd"
 	"github.com/hkontrol/hkontroller"
@@ -66,8 +65,18 @@ func main() {
 							return
 						}
 						fmt.Println("current temp: ", val)
-						err = device.SubscribeToEvents(context.TODO(), a.Id, ts.Iid)
-						fmt.Println("subscribe result: ", err)
+						err = device.SubscribeToEvents(a.Id, ts.Iid, func(aid uint64, iid uint64, value interface{}) {
+							fmt.Println("subscribe cb: ", aid, iid, value)
+						})
+						go func() {
+							time.Sleep(60 * time.Second)
+							fmt.Println("unsubscribing from event")
+							err := device.UnsubscribeFromEvents(a.Id, ts.Iid)
+							if err != nil {
+								fmt.Println("unsubscribe err: ", err)
+								return
+							}
+						}()
 					}
 				}
 
@@ -96,8 +105,9 @@ func main() {
 							}
 							fmt.Println("got char value: ", val)
 
-							err = device.SubscribeToEvents(context.TODO(), a.Id, on.Iid)
-							fmt.Println("subscribe result: ", err)
+							err = device.SubscribeToEvents(a.Id, on.Iid, func(aid uint64, iid uint64, value interface{}) {
+								fmt.Println("subs cb: ", aid, iid, value)
+							})
 
 							time.Sleep(1 * time.Second)
 

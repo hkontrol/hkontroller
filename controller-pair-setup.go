@@ -298,11 +298,7 @@ func (c *Controller) PairSetup(deviceId string, pin string) error {
 		}
 		// connection, http client
 		cc := newConn(dial)
-
-		device.httpc = &http.Client{
-			Transport: cc,
-		}
-		device.cc = cc
+		device.SetConnection(cc)
 	}
 
 	clientSession, err := c.pairSetupM1(device, pin)

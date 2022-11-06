@@ -2,7 +2,6 @@ package hkontroller
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +9,15 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 )
+
+type aidIid struct {
+	aid uint64
+	iid uint64
+}
+
+type eventCallback func(aid uint64, iid uint64, value interface{})
 
 type Device struct {
 	Id string
@@ -23,10 +30,21 @@ type Device struct {
 
 	tcpAddr  string // tcp socket address
 	httpAddr string // tcp socket address
-	cc       *conn
-	ss       *session
-	httpc    *http.Client // http client with encryption support
-	accs     *Accessories
+
+	cc    *conn
+	ss    *session
+	httpc *http.Client // http client with encryption support
+	accs  *Accessories
+
+	emu           sync.Mutex
+	eventHandlers map[aidIid]eventCallback
+}
+
+func newDevice(id string) *Device {
+	return &Device{
+		Id:            id,
+		eventHandlers: make(map[aidIid]eventCallback),
+	}
 }
 
 // IsDiscovered indicates if device is advertised via multicast dns
@@ -125,21 +143,6 @@ func (d *Device) GetCharacteristic(aid uint64, cid uint64) (CharacteristicDescri
 
 func (d *Device) PutCharacteristic(aid uint64, cid uint64, val interface{}) error {
 
-	/***
-	PUT /characteristics HTTP/1.1
-	Host: lights.local:12345
-	Content-Type: application/hap+json
-	Content-Length: <length>
-	{
-	    ”characteristics” :
-	    [{
-	        ”aid” : 2,
-	        ”iid” : 8,
-	        ”value” : true
-	    },...]
-	}
-	 ***/
-
 	type putPayload struct {
 		Cs []CharacteristicPut `json:"characteristics"`
 	}
@@ -149,7 +152,6 @@ func (d *Device) PutCharacteristic(aid uint64, cid uint64, val interface{}) erro
 	if err != nil {
 		return err
 	}
-	fmt.Println("marshalled: ", string(b))
 
 	req, err := http.NewRequest("PUT", "/characteristics", bytes.NewReader(b))
 	if err != nil {
@@ -164,22 +166,100 @@ func (d *Device) PutCharacteristic(aid uint64, cid uint64, val interface{}) erro
 	return nil
 }
 
-func (d *Device) SubscribeToEvents(ctx context.Context, aid uint64, cid uint64) error {
-
-	/***
-	PUT /characteristics HTTP/1.1
-	Host: lights.local:12345
-	Content-Type: application/hap+json
-	Content-Length: <length>
-	{
-	    ”characteristics” :
-	    [{
-	        ”aid” : 2,
-	        ”iid” : 8,
-	        "ev": true
-	    },...]
+func (d *Device) SetConnection(cc *conn) {
+	d.cc = cc
+	d.httpc = &http.Client{
+		Transport: cc,
 	}
-	 ***/
+	d.cc.SetEventCallback(d.OnEvent)
+}
+
+func (d *Device) OnEvent(res *http.Response) {
+	all, err := io.ReadAll(res.Body)
+	if err != nil {
+		return
+	}
+
+	type responsePayload struct {
+		Characteristics []CharacteristicDescription `json:"characteristics"`
+	}
+
+	var chrs responsePayload
+	err = json.Unmarshal(all, &chrs)
+	if err != nil {
+		return
+	}
+	for _, ch := range chrs.Characteristics {
+		aid := ch.Aid
+		iid := ch.Iid
+		val := ch.Value
+
+		ai := aidIid{
+			aid: aid,
+			iid: iid,
+		}
+		d.emu.Lock()
+		cb, ok := d.eventHandlers[ai]
+		if ok {
+			if cb != nil {
+				cb(aid, iid, val)
+			}
+		}
+		d.emu.Unlock()
+	}
+}
+
+func (d *Device) UnsubscribeFromEvents(aid uint64, cid uint64) error {
+	ai := aidIid{
+		aid: aid,
+		iid: cid,
+	}
+	d.emu.Lock()
+	_, ok := d.eventHandlers[ai]
+	d.emu.Unlock()
+	if !ok {
+		return errors.New("not subscribed")
+	}
+
+	type putPayload struct {
+		Cs []CharacteristicPut `json:"characteristics"`
+	}
+
+	ev := false
+	c := putPayload{Cs: []CharacteristicPut{{Aid: aid, Iid: cid, Events: &ev}}}
+	b, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("PUT", "/characteristics", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	_, err = d.httpc.Do(req)
+	if err != nil {
+		return err
+	}
+
+	d.emu.Lock()
+	delete(d.eventHandlers, ai)
+	d.emu.Unlock()
+
+	return nil
+}
+func (d *Device) SubscribeToEvents(aid uint64, cid uint64, callback eventCallback) error {
+
+	ai := aidIid{
+		aid: aid,
+		iid: cid,
+	}
+	d.emu.Lock()
+	_, ok := d.eventHandlers[ai]
+	d.emu.Unlock()
+	if ok {
+		return errors.New("already subscribed")
+	}
 
 	type putPayload struct {
 		Cs []CharacteristicPut `json:"characteristics"`
@@ -191,17 +271,29 @@ func (d *Device) SubscribeToEvents(ctx context.Context, aid uint64, cid uint64) 
 	if err != nil {
 		return err
 	}
-	fmt.Println("marshalled: ", string(b))
 
 	req, err := http.NewRequest("PUT", "/characteristics", bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
 
-	_, err = d.httpc.Do(req)
+	res, err := d.httpc.Do(req)
 	if err != nil {
 		return err
 	}
+
+	if res.StatusCode != http.StatusNoContent {
+		return errors.New("not 204")
+	}
+
+	d.emu.Lock()
+	d.eventHandlers[ai] = callback
+	d.emu.Unlock()
+
+	//select {
+	//case <-ctx.Done():
+	//	// TODO something
+	//}
 
 	return nil
 }

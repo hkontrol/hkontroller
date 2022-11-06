@@ -79,20 +79,17 @@ func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Devic
 		c.mu.Lock()
 		c.mdnsDiscovered[id] = &e
 
-		pairing, ok := c.devices[id]
+		dd, ok := c.devices[id]
 		if !ok {
 			// not exist - init one
-			c.devices[id] = &Device{
-				Id: id,
-				pairing: Pairing{
-					Name: id,
-				},
-			}
-			pairing = c.devices[id]
+			c.devices[id] = newDevice(id)
+			pairing := Pairing{Name: id}
+			c.devices[id].pairing = pairing
+			dd = c.devices[id]
 		}
 		c.mu.Unlock()
 
-		pairing.discovered = true
+		dd.discovered = true
 		if len(e.IPs) == 0 {
 			return
 		}
@@ -123,11 +120,11 @@ func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Devic
 			break
 		}
 
-		pairing.tcpAddr = devTcpAddr
-		pairing.httpAddr = devHttpUrl
+		dd.tcpAddr = devTcpAddr
+		dd.httpAddr = devHttpUrl
 
 		// end section tcp conn
-		onDiscover(&e, pairing)
+		onDiscover(&e, dd)
 	}
 
 	rmvFn := func(e dnssd.BrowseEntry) {
@@ -217,7 +214,10 @@ func (c *Controller) LoadPairings() error {
 
 	pp := c.st.Pairings()
 	for _, p := range pp {
-		c.devices[p.Name] = &Device{Id: p.Name, pairing: p, paired: true}
+		id := p.Name
+		c.devices[id] = newDevice(id)
+		c.devices[id].pairing = p
+		c.devices[id].paired = true
 	}
 
 	return nil
