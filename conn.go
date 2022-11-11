@@ -240,20 +240,30 @@ func (d *Device) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	err := req.Write(d.cc)
 	if err != nil {
+		fmt.Println("d.RoundTrip write err: ", err)
 		d.cc.Conn.Close()
 		d.cc.closed = true
 
 		// in case of error try to reconnect
 		// and re-establish encrypted session
+		fmt.Println("d.RoundTrip reconnecting ")
 		e := d.Reconnect()
 		if e != nil {
+			fmt.Println("d.RoundTrip reconnect err: ", e)
 			return nil, err
 		}
 		if d.paired {
+			fmt.Println("d.RoundTrip launching PairVerify ")
 			e = d.PairVerify()
 			if e != nil {
+				fmt.Println("d.RoundTrip PairVerify err: ", e)
 				return nil, err
 			}
+			fmt.Println("d.RoundTrip PairVerify success")
+		}
+		err = req.Write(d.cc)
+		if err != nil {
+			return nil, err
 		}
 	}
 

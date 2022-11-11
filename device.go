@@ -55,21 +55,20 @@ func newDevice(id string, controllerId string, controllerLTPK []byte, controller
 	}
 }
 
-// PairSetup
-
-// PairVerify
-
 func (d *Device) Reconnect() error {
 
 	if d.cc != nil {
+		fmt.Println("device.Reconnect closing old connection ")
 		d.cc.Close()
 		d.cc = nil
 		d.httpc = nil
+		fmt.Println("device.Reconnect old connection closed")
 	}
 	d.verified = false
 
 	dial, err := net.Dial("tcp", d.tcpAddr)
 	if err != nil {
+		fmt.Println("device.Reconnect: ", err)
 		return err
 	}
 
@@ -80,6 +79,8 @@ func (d *Device) Reconnect() error {
 		Transport: d,
 	}
 	d.cc.SetEventCallback(d.OnEvent)
+
+	fmt.Println("device.Reconnect returning from func")
 
 	return nil
 }
@@ -318,11 +319,6 @@ func (d *Device) SubscribeToEvents(aid uint64, cid uint64, callback eventCallbac
 	d.emu.Lock()
 	d.eventHandlers[ai] = callback
 	d.emu.Unlock()
-
-	//select {
-	//case <-ctx.Done():
-	//	// TODO something
-	//}
 
 	return nil
 }
