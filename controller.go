@@ -82,7 +82,7 @@ func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Devic
 		dd, ok := c.devices[id]
 		if !ok {
 			// not exist - init one
-			c.devices[id] = newDevice(id)
+			c.devices[id] = newDevice(id, c.name, c.localLTKP, c.localLTSK)
 			pairing := Pairing{Name: id}
 			c.devices[id].pairing = pairing
 			dd = c.devices[id]
@@ -215,7 +215,7 @@ func (c *Controller) LoadPairings() error {
 	pp := c.st.Pairings()
 	for _, p := range pp {
 		id := p.Name
-		c.devices[id] = newDevice(id)
+		c.devices[id] = newDevice(id, c.name, c.localLTKP, c.localLTSK)
 		c.devices[id].pairing = p
 		c.devices[id].paired = true
 	}
@@ -223,7 +223,7 @@ func (c *Controller) LoadPairings() error {
 	return nil
 }
 
-func (c *Controller) GetPairedDevice(deviceId string) *Device {
+func (c *Controller) GetDevice(deviceId string) *Device {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

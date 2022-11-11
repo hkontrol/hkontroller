@@ -9,7 +9,6 @@ import (
 	"github.com/hkontrol/hkontroller/hkdf"
 	"github.com/hkontrol/hkontroller/tlv8"
 	"io"
-	"net"
 	"net/http"
 	"strconv"
 )
@@ -34,7 +33,7 @@ type pairSetupM5EncPayload struct {
 	EncryptedData []byte `tlv8:"5"`
 }
 
-func (c *Controller) pairSetupM1(device *Device, pin string) (*pairSetupClientSession, error) {
+func (d *Device) pairSetupM1(pin string) (*pairSetupClientSession, error) {
 
 	m1 := pairSetupM1Payload{
 		State:  M1,
@@ -45,7 +44,7 @@ func (c *Controller) pairSetupM1(device *Device, pin string) (*pairSetupClientSe
 		return nil, err
 	}
 
-	resp, err := device.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := d.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +84,7 @@ func (c *Controller) pairSetupM1(device *Device, pin string) (*pairSetupClientSe
 	return clientSession, nil
 }
 
-func (c *Controller) pairSetupM3(device *Device, clientSession *pairSetupClientSession) error {
+func (d *Device) pairSetupM3(clientSession *pairSetupClientSession) error {
 
 	// m3
 	m3 := pairSetupM3Payload{
@@ -98,7 +97,7 @@ func (c *Controller) pairSetupM3(device *Device, clientSession *pairSetupClientS
 		return err
 	}
 
-	resp, err := device.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := d.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -134,7 +133,7 @@ func (c *Controller) pairSetupM3(device *Device, clientSession *pairSetupClientS
 	return nil
 }
 
-func (c *Controller) pairSetupM5(device *Device, clientSession *pairSetupClientSession) error {
+func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 
 	err := clientSession.SetupEncryptionKey(
 		[]byte("Pair-Setup-Encrypt-Salt"),
@@ -155,17 +154,17 @@ func (c *Controller) pairSetupM5(device *Device, clientSession *pairSetupClientS
 
 	var material []byte
 	material = append(material, hash[:]...)
-	material = append(material, c.name...)
-	material = append(material, c.localLTKP...)
+	material = append(material, d.controllerId...)
+	material = append(material, d.controllerLTPK...)
 
-	signature, err := ed25519.Signature(c.localLTSK, material)
+	signature, err := ed25519.Signature(d.controllerLTSK, material)
 	if err != nil {
 		return err
 	}
 
 	m5raw := pairSetupM5RawPayload{
-		Identifier: c.name,
-		PublicKey:  c.localLTKP,
+		Identifier: d.controllerId,
+		PublicKey:  d.controllerLTPK,
 		Signature:  signature,
 	}
 	b, err := tlv8.Marshal(m5raw)
@@ -193,7 +192,7 @@ func (c *Controller) pairSetupM5(device *Device, clientSession *pairSetupClientS
 	if err != nil {
 		return err
 	}
-	resp, err := device.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := d.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -263,8 +262,8 @@ func (c *Controller) pairSetupM5(device *Device, clientSession *pairSetupClientS
 		return errors.New("m6 sig not valid")
 	}
 
-	device.pairing.Name = accessoryId
-	device.pairing.PublicKey = accessoryLTPK
+	d.pairing.Name = accessoryId
+	d.pairing.PublicKey = accessoryLTPK
 	//device.tcpAddr = devTcpAddr
 	return nil
 }
@@ -290,36 +289,40 @@ func (c *Controller) PairSetup(deviceId string, pin string) error {
 		return nil
 	}
 
-	if device.httpc == nil {
-		// tcp conn open
-		dial, err := net.Dial("tcp", device.tcpAddr)
-		if err != nil {
-			return err
-		}
-		// connection, http client
-		cc := newConn(dial)
-		device.SetConnection(cc)
-	}
-
-	clientSession, err := c.pairSetupM1(device, pin)
+	err := device.PairSetup(pin)
 	if err != nil {
 		return err
 	}
-	err = c.pairSetupM3(device, clientSession)
-	if err != nil {
-		return err
-	}
-	err = c.pairSetupM5(device, clientSession)
-	if err != nil {
-		return err
-	}
-	device.paired = true
-	device.verified = false
 
 	err = c.st.SavePairing(device.pairing)
 	if err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func (d *Device) PairSetup(pin string) error {
+
+	err := d.Reconnect()
+	if err != nil {
+		return err
+	}
+	// tcp conn open
+
+	clientSession, err := d.pairSetupM1(pin)
+	if err != nil {
+		return err
+	}
+	err = d.pairSetupM3(clientSession)
+	if err != nil {
+		return err
+	}
+	err = d.pairSetupM5(clientSession)
+	if err != nil {
+		return err
+	}
+	d.paired = true
+	d.verified = false
 	return nil
 }

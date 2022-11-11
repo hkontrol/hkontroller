@@ -9,7 +9,6 @@ import (
 	"github.com/hkontrol/hkontroller/hkdf"
 	"github.com/hkontrol/hkontroller/tlv8"
 	"io"
-	"net"
 	"strconv"
 )
 
@@ -40,15 +39,13 @@ func (c *Controller) PairVerify(devId string) error {
 		return errors.New("no dnssd entry found")
 	}
 
-	if device.httpc == nil {
-		// tcp conn open
-		dial, err := net.Dial("tcp", device.tcpAddr)
-		if err != nil {
-			return err
-		}
-		// connection, http client
-		cc := newConn(dial)
-		device.SetConnection(cc)
+	return device.PairVerify()
+}
+
+func (d *Device) PairVerify() error {
+	err := d.Reconnect()
+	if err != nil {
+		return err
 	}
 
 	localPublic, localPrivate := curve25519.GenerateKeyPair()
@@ -64,7 +61,7 @@ func (c *Controller) PairVerify(devId string) error {
 	}
 
 	// send req
-	response, err := device.httpc.Post("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	response, err := d.httpc.Post("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -132,7 +129,7 @@ func (c *Controller) PairVerify(devId string) error {
 	material = append(material, m2dec.Identifier...)
 	material = append(material, localPublic[:]...)
 
-	ltpk := device.pairing.PublicKey
+	ltpk := d.pairing.PublicKey
 
 	sigValid := ed25519.ValidateSignature(ltpk, material, m2dec.Signature)
 	if !sigValid {
@@ -143,17 +140,17 @@ func (c *Controller) PairVerify(devId string) error {
 
 	material = []byte{}
 	material = append(material, localPublic[:]...)
-	material = append(material, c.name...)
+	material = append(material, d.controllerId...)
 	material = append(material, remotePubk[:]...)
 
-	signature, err := ed25519.Signature(c.localLTSK, material)
+	signature, err := ed25519.Signature(d.controllerLTSK, material)
 	if err != nil {
 		return err
 	}
 
 	m3raw := pairVerifyM3RawPayload{
 		Signature:  signature,
-		Identifier: c.name,
+		Identifier: d.controllerId,
 	}
 	m3bytes, err := tlv8.Marshal(m3raw)
 	if err != nil {
@@ -179,7 +176,7 @@ func (c *Controller) PairVerify(devId string) error {
 		return err
 	}
 
-	response, err = device.httpc.Post("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	response, err = d.httpc.Post("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -200,17 +197,15 @@ func (c *Controller) PairVerify(devId string) error {
 		return errors.New("m4err = " + strconv.FormatInt(int64(m4.Error), 10))
 	}
 
-	//device.httpc.CloseIdleConnections()
-
-	ss, err := newControllerSession(sharedKey, *device)
+	ss, err := newControllerSession(sharedKey, d)
 	if err != nil {
 		return err
 	}
-	device.ss = ss
-	device.cc.UpgradeEnc(ss)
-	device.verified = true
+	d.ss = ss
+	d.cc.UpgradeEnc(ss)
+	d.verified = true
 
-	device.cc.StartBackgroundRead()
+	d.cc.StartBackgroundRead()
 
 	return nil
 }

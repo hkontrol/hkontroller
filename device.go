@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -21,6 +22,10 @@ type eventCallback func(aid uint64, iid uint64, value interface{})
 
 type Device struct {
 	Id string
+
+	controllerId   string
+	controllerLTPK []byte
+	controllerLTSK []byte
 
 	pairing Pairing
 
@@ -40,11 +45,43 @@ type Device struct {
 	eventHandlers map[aidIid]eventCallback
 }
 
-func newDevice(id string) *Device {
+func newDevice(id string, controllerId string, controllerLTPK []byte, controllerLTSK []byte) *Device {
 	return &Device{
-		Id:            id,
-		eventHandlers: make(map[aidIid]eventCallback),
+		Id:             id,
+		controllerId:   controllerId,
+		controllerLTPK: controllerLTPK,
+		controllerLTSK: controllerLTSK,
+		eventHandlers:  make(map[aidIid]eventCallback),
 	}
+}
+
+// PairSetup
+
+// PairVerify
+
+func (d *Device) Reconnect() error {
+
+	if d.cc != nil {
+		d.cc.Close()
+		d.cc = nil
+		d.httpc = nil
+	}
+	d.verified = false
+
+	dial, err := net.Dial("tcp", d.tcpAddr)
+	if err != nil {
+		return err
+	}
+
+	// connection, http client
+	cc := newConn(dial)
+	d.cc = cc
+	d.httpc = &http.Client{
+		Transport: d,
+	}
+	d.cc.SetEventCallback(d.OnEvent)
+
+	return nil
 }
 
 // IsDiscovered indicates if device is advertised via multicast dns
@@ -164,14 +201,6 @@ func (d *Device) PutCharacteristic(aid uint64, cid uint64, val interface{}) erro
 	}
 
 	return nil
-}
-
-func (d *Device) SetConnection(cc *conn) {
-	d.cc = cc
-	d.httpc = &http.Client{
-		Transport: cc,
-	}
-	d.cc.SetEventCallback(d.OnEvent)
 }
 
 func (d *Device) OnEvent(res *http.Response) {

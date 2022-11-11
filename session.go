@@ -44,7 +44,7 @@ func conns() map[string]*conn {
 }
 
 type session struct {
-	Pairing Device
+	Device Device
 
 	encryptKey   [32]byte
 	decryptKey   [32]byte
@@ -52,13 +52,21 @@ type session struct {
 	decryptCount uint64
 }
 
-func newControllerSession(shared [32]byte, p Device) (*session, error) {
+func newControllerSession(shared [32]byte, d *Device) (*session, error) {
 	salt := []byte("Control-Salt")
 	in := []byte("Control-Read-Encryption-Key")
 	out := []byte("Control-Write-Encryption-Key")
 
 	s := &session{
-		Pairing: p,
+		Device: Device{
+			Id:         d.Id,
+			pairing:    d.pairing,
+			discovered: d.discovered,
+			paired:     d.paired,
+			verified:   d.verified,
+			tcpAddr:    d.tcpAddr,
+			httpAddr:   d.httpAddr,
+		},
 	}
 	var err error
 	s.encryptKey, err = hkdf.Sha512(shared[:], salt, out)

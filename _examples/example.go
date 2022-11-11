@@ -34,7 +34,7 @@ func main() {
 				panic(err)
 			}
 
-			p := c.GetPairedDevice(device.Id)
+			p := c.GetDevice(device.Id)
 			if p == nil {
 				panic("no paired device found")
 			}
