@@ -1,14 +1,13 @@
 package hkontroller
 
 import (
-	"fmt"
-	"net/http"
-	"sync"
-
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"net"
+	"net/http"
+	"sync"
 )
 
 const eventHeader = "EVENT"
@@ -141,9 +140,11 @@ const (
 // Read reads bytes from the connection.
 // The read bytes are decrypted when possible.
 func (c *conn) Read(b []byte) (int, error) {
+	fmt.Println("conn read")
 	if c.ss == nil {
 		n, err := c.Conn.Read(b)
 		if err != nil {
+			fmt.Println("conn read err ", err)
 			c.closed = true
 			c.Conn.Close()
 		}
@@ -154,8 +155,10 @@ func (c *conn) Read(b []byte) (int, error) {
 		r := bufio.NewReader(c.Conn)
 		buf, err := c.ss.Decrypt(r)
 		if err != nil {
+			fmt.Println("conn ss read err ", err)
 			if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 				// Ignore timeout error #77
+				fmt.Println("err timeout")
 			} else { // if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 				c.closed = true
 				c.Conn.Close()
@@ -175,12 +178,7 @@ func (c *conn) Read(b []byte) (int, error) {
 	return n, err
 }
 
-func (c *conn) StartBackgroundRead() {
-	go c.backgroundRead()
-	c.inBackground = true
-}
-
-func (c *conn) backgroundRead() {
+func (c *conn) loop() {
 
 	rd := bufio.NewReader(c)
 
@@ -240,31 +238,7 @@ func (d *Device) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	err := req.Write(d.cc)
 	if err != nil {
-		fmt.Println("d.RoundTrip write err: ", err)
-		d.cc.Conn.Close()
-		d.cc.closed = true
-
-		// in case of error try to reconnect
-		// and re-establish encrypted session
-		fmt.Println("d.RoundTrip reconnecting ")
-		e := d.Reconnect()
-		if e != nil {
-			fmt.Println("d.RoundTrip reconnect err: ", e)
-			return nil, err
-		}
-		if d.paired {
-			fmt.Println("d.RoundTrip launching PairVerify ")
-			e = d.PairVerify()
-			if e != nil {
-				fmt.Println("d.RoundTrip PairVerify err: ", e)
-				return nil, err
-			}
-			fmt.Println("d.RoundTrip PairVerify success")
-		}
-		err = req.Write(d.cc)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	if d.cc.inBackground {

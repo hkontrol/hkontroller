@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 type aidIid struct {
@@ -55,22 +56,44 @@ func newDevice(id string, controllerId string, controllerLTPK []byte, controller
 	}
 }
 
-func (d *Device) Reconnect() error {
+func (d *Device) doRequest(req *http.Request) (*http.Response, error) {
+	if d.httpc == nil || d.cc == nil {
+		return nil, errors.New("no http client available")
+	}
+	return d.httpc.Do(req)
+}
+
+func (d *Device) doPost(url string, contentType string, body io.Reader) (*http.Response, error) {
+	if d.httpc == nil || d.cc == nil {
+		return nil, errors.New("no http client available")
+	}
+	return d.httpc.Post(url, contentType, body)
+}
+func (d *Device) doGet(url string) (*http.Response, error) {
+	if d.httpc == nil || d.cc == nil {
+		return nil, errors.New("no http client available")
+	}
+	return d.httpc.Get(url)
+}
+
+func (d *Device) connect() error {
 
 	if d.cc != nil {
-		fmt.Println("device.Reconnect closing old connection ")
+		fmt.Println("device.connect closing old connection ")
 		d.cc.Close()
 		d.cc = nil
 		d.httpc = nil
-		fmt.Println("device.Reconnect old connection closed")
+		fmt.Println("device.connect old connection closed")
 	}
 	d.verified = false
 
-	dial, err := net.Dial("tcp", d.tcpAddr)
+	fmt.Println("device.connect dialing ", d.tcpAddr)
+	dial, err := net.DialTimeout("tcp", d.tcpAddr, time.Second)
 	if err != nil {
-		fmt.Println("device.Reconnect: ", err)
+		fmt.Println("device.connect: ", err)
 		return err
 	}
+	fmt.Println("device.connect dial success")
 
 	// connection, http client
 	cc := newConn(dial)
@@ -78,11 +101,36 @@ func (d *Device) Reconnect() error {
 	d.httpc = &http.Client{
 		Transport: d,
 	}
-	d.cc.SetEventCallback(d.OnEvent)
+	d.cc.SetEventCallback(d.onEvent)
 
-	fmt.Println("device.Reconnect returning from func")
+	fmt.Println("device.connect returning from func")
 
 	return nil
+}
+
+func (d *Device) startBackgroundRead() {
+	go func() {
+		for {
+			d.cc.loop()
+			if d.cc.closed {
+				for {
+					err := d.connect()
+					if err == nil {
+						break
+					}
+					time.Sleep(time.Second)
+				}
+				go func() {
+					err := d.PairVerify()
+					if err != nil {
+						return
+					}
+				}()
+				return
+			}
+		}
+	}()
+	d.cc.inBackground = true
 }
 
 // IsDiscovered indicates if device is advertised via multicast dns
@@ -107,7 +155,7 @@ func (d *Device) DiscoverAccessories() error {
 		return errors.New("paired device not verified or not connected")
 	}
 
-	res, err := d.httpc.Get("/accessories")
+	res, err := d.doGet("/accessories")
 	if err != nil {
 		return err
 	}
@@ -150,7 +198,7 @@ func (d *Device) GetAccessories() []*Accessory {
 
 func (d *Device) GetCharacteristic(aid uint64, cid uint64) (CharacteristicDescription, error) {
 	ep := fmt.Sprintf("/characteristics?id=%d.%d", aid, cid)
-	res, err := d.httpc.Get(ep)
+	res, err := d.doGet(ep)
 	if err != nil {
 		return CharacteristicDescription{}, err
 	}
@@ -196,7 +244,7 @@ func (d *Device) PutCharacteristic(aid uint64, cid uint64, val interface{}) erro
 		return err
 	}
 
-	_, err = d.httpc.Do(req)
+	_, err = d.doRequest(req)
 	if err != nil {
 		return err
 	}
@@ -204,7 +252,7 @@ func (d *Device) PutCharacteristic(aid uint64, cid uint64, val interface{}) erro
 	return nil
 }
 
-func (d *Device) OnEvent(res *http.Response) {
+func (d *Device) onEvent(res *http.Response) {
 	all, err := io.ReadAll(res.Body)
 	if err != nil {
 		return
@@ -267,7 +315,7 @@ func (d *Device) UnsubscribeFromEvents(aid uint64, cid uint64) error {
 		return err
 	}
 
-	_, err = d.httpc.Do(req)
+	_, err = d.doRequest(req)
 	if err != nil {
 		return err
 	}
@@ -307,7 +355,7 @@ func (d *Device) SubscribeToEvents(aid uint64, cid uint64, callback eventCallbac
 		return err
 	}
 
-	res, err := d.httpc.Do(req)
+	res, err := d.doRequest(req)
 	if err != nil {
 		return err
 	}

@@ -44,7 +44,7 @@ func (d *Device) pairSetupM1(pin string) (*pairSetupClientSession, error) {
 		return nil, err
 	}
 
-	resp, err := d.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := d.doPost("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func (d *Device) pairSetupM3(clientSession *pairSetupClientSession) error {
 		return err
 	}
 
-	resp, err := d.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := d.doPost("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -192,7 +192,7 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 	if err != nil {
 		return err
 	}
-	resp, err := d.httpc.Post("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := d.doPost("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -304,7 +304,7 @@ func (c *Controller) PairSetup(deviceId string, pin string) error {
 
 func (d *Device) PairSetup(pin string) error {
 
-	err := d.Reconnect()
+	err := d.connect()
 	if err != nil {
 		return err
 	}

@@ -43,7 +43,7 @@ func (c *Controller) PairVerify(devId string) error {
 }
 
 func (d *Device) PairVerify() error {
-	err := d.Reconnect()
+	err := d.connect()
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func (d *Device) PairVerify() error {
 	}
 
 	// send req
-	response, err := d.httpc.Post("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	response, err := d.doPost("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -176,7 +176,7 @@ func (d *Device) PairVerify() error {
 		return err
 	}
 
-	response, err = d.httpc.Post("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	response, err = d.doPost("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -205,7 +205,7 @@ func (d *Device) PairVerify() error {
 	d.cc.UpgradeEnc(ss)
 	d.verified = true
 
-	d.cc.StartBackgroundRead()
+	d.startBackgroundRead()
 
 	return nil
 }
