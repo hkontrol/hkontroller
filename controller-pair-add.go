@@ -24,13 +24,7 @@ type pairAddResPayload struct {
 }
 
 // PairAdd serves to pair another controller.
-func (c *Controller) PairAdd(devId string, p Pairing) error {
-	c.mu.Lock()
-	d, ok := c.devices[devId]
-	c.mu.Unlock()
-	if !ok {
-		return errors.New("no device found")
-	}
+func (d *Device) PairAdd(p Pairing) error {
 
 	pl := pairAddReqPayload{
 		State:       M1,
@@ -44,7 +38,7 @@ func (c *Controller) PairAdd(devId string, p Pairing) error {
 		return err
 	}
 
-	resp, err := d.httpc.Post("/pairings", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := d.doPost("/pairings", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}

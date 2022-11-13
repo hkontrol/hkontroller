@@ -268,40 +268,6 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 	return nil
 }
 
-func (c *Controller) PairSetup(deviceId string, pin string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	var ok bool
-	var device *Device
-
-	_, ok = c.mdnsDiscovered[deviceId]
-	if !ok {
-		return errors.New("device with given id not discovered")
-	}
-	if device, ok = c.devices[deviceId]; !ok {
-		fmt.Println("device not found")
-		return errors.New("device not found")
-	}
-
-	if device.paired {
-		fmt.Println("already paired!")
-		return nil
-	}
-
-	err := device.PairSetup(pin)
-	if err != nil {
-		return err
-	}
-
-	err = c.st.SavePairing(device.pairing)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (d *Device) PairSetup(pin string) error {
 
 	err := d.connect()
@@ -324,5 +290,6 @@ func (d *Device) PairSetup(pin string) error {
 	}
 	d.paired = true
 	d.verified = false
+	d.Emit("paired")
 	return nil
 }

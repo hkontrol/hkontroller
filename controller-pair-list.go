@@ -21,7 +21,6 @@ type pairingPayload struct {
 }
 
 // ListPairings should list all controllers of device.
-// Currently, doesn't work as expected
 func (d *Device) ListPairings() ([]Pairing, error) {
 
 	pl := pairListReqPayload{
@@ -33,7 +32,7 @@ func (d *Device) ListPairings() ([]Pairing, error) {
 		return nil, err
 	}
 
-	resp, err := d.httpc.Post("/pairings", HTTPContentTypePairingTLV8, bytes.NewReader(b))
+	resp, err := d.doPost("/pairings", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}
@@ -43,9 +42,6 @@ func (d *Device) ListPairings() ([]Pairing, error) {
 	res := resp.Body
 	defer res.Close()
 
-	//
-	////l := len(all)
-	////o := 0
 	var tag byte
 	err = binary.Read(res, binary.BigEndian, &tag)
 	if err != nil {

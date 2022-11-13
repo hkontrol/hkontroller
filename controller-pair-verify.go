@@ -26,22 +26,6 @@ type pairVerifyM3EncPayload struct {
 	EncryptedData []byte `tlv8:"5"`
 }
 
-func (c *Controller) PairVerify(devId string) error {
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	device, ok := c.devices[devId]
-	if !ok {
-		return errors.New("no devices accessory found")
-	}
-	_, ok = c.mdnsDiscovered[devId]
-	if !ok {
-		return errors.New("no dnssd entry found")
-	}
-
-	return device.PairVerify()
-}
-
 func (d *Device) PairVerify() error {
 	err := d.connect()
 	if err != nil {
@@ -206,6 +190,8 @@ func (d *Device) PairVerify() error {
 	d.verified = true
 
 	d.startBackgroundRead()
+
+	d.Emit("verified")
 
 	return nil
 }

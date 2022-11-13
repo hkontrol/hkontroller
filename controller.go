@@ -134,14 +134,15 @@ func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Devic
 		}
 		c.mu.Lock()
 		delete(c.mdnsDiscovered, id)
-		pairing, ok := c.devices[id]
+		dd, ok := c.devices[id]
 		c.mu.Unlock()
 
 		if ok {
-			pairing.discovered = false
-			pairing.verified = false
-			pairing.httpc = nil
-			onRemove(&e, pairing)
+			dd.close()
+			dd.discovered = false
+			dd.verified = false
+			dd.httpc = nil
+			onRemove(&e, dd)
 		}
 	}
 

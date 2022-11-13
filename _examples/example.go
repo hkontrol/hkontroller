@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/brutella/dnssd"
 	"github.com/hkontrol/hkontroller"
+	"github.com/olebedev/emitter"
 	"time"
 )
 
@@ -25,11 +26,11 @@ func main() {
 			//if device.Id != "28:EF:D2:66:94:C2" {
 			//	return
 			//}
-			err = c.PairSetup(device.Id, "031-45-154")
+			err = device.PairSetup("031-45-154")
 			if err != nil {
 				panic(err)
 			}
-			err = c.PairVerify(device.Id)
+			err = device.PairVerify()
 			if err != nil {
 				panic(err)
 			}
@@ -39,13 +40,12 @@ func main() {
 				panic("no paired device found")
 			}
 
-			err = p.DiscoverAccessories()
+			err = p.GetAccessories()
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println("num of accs: ", len(p.GetAccessories()))
-
-			for _, a := range p.GetAccessories() {
+			fmt.Println("num of accs: ", len(p.Accessories()))
+			for _, a := range p.Accessories() {
 				ai := a.GetService(hkontroller.SType_AccessoryInfo)
 				if ai == nil {
 					panic("nil accessory info service")
@@ -55,6 +55,20 @@ func main() {
 					panic("nil acc name")
 				}
 				fmt.Println("  > ", cn.Value)
+				th := a.GetService(hkontroller.SType_Thermostat)
+				fmt.Println("thermostat? ", th)
+			}
+
+			for _, a := range p.Accessories() {
+				ai := a.GetService(hkontroller.SType_AccessoryInfo)
+				if ai == nil {
+					panic("nil accessory info service")
+				}
+				cn := ai.GetCharacteristic(hkontroller.CType_Name)
+				if cn == nil {
+					panic("nil acc name")
+				}
+				fmt.Println("  >>>>>> >>>> >>>  ", cn.Value)
 
 				th := a.GetService(hkontroller.SType_Thermostat)
 				if th != nil {
@@ -65,7 +79,10 @@ func main() {
 							return
 						}
 						fmt.Println("current temp: ", val)
-						err = device.SubscribeToEvents(a.Id, ts.Iid, func(aid uint64, iid uint64, value interface{}) {
+						err = device.SubscribeToEvents(a.Id, ts.Iid, func(e *emitter.Event) {
+							aid := e.Args[0]
+							iid := e.Args[1]
+							value := e.Args[2]
 							fmt.Println("subscribe cb: ", aid, iid, value)
 						})
 						go func() {
@@ -80,9 +97,9 @@ func main() {
 					}
 				}
 
-				lb := a.GetService(hkontroller.SType_Switch)
-				if lb != nil {
-					on := lb.GetCharacteristic(hkontroller.CType_On)
+				sw := a.GetService(hkontroller.SType_Switch)
+				if sw != nil {
+					on := sw.GetCharacteristic(hkontroller.CType_On)
 					if on != nil {
 						val, ok := on.Value.(bool)
 						if !ok {
@@ -105,11 +122,14 @@ func main() {
 							}
 							fmt.Println("got char value: ", val)
 
-							err = device.SubscribeToEvents(a.Id, on.Iid, func(aid uint64, iid uint64, value interface{}) {
+							err = device.SubscribeToEvents(a.Id, on.Iid, func(e *emitter.Event) {
+								aid := e.Args[0]
+								iid := e.Args[1]
+								value := e.Args[2]
 								fmt.Println("subs cb: ", aid, iid, value)
 							})
 
-							time.Sleep(1 * time.Second)
+							//time.Sleep(1 * time.Second)
 
 							val, err = device.GetCharacteristic(a.Id, on.Iid)
 							if err != nil {
@@ -122,13 +142,13 @@ func main() {
 				}
 			}
 
-			time.Sleep(15 * time.Minute)
+			time.Sleep(3 * time.Minute)
 			keypair, err := hkontroller.GenerateKeyPair()
 			if err != nil {
 				panic(err)
 			}
 
-			err = c.PairAdd(device.Id, hkontroller.Pairing{
+			err = device.PairAdd(hkontroller.Pairing{
 				Name:       "another device",
 				PublicKey:  keypair.Public,
 				Permission: 0,
@@ -143,23 +163,23 @@ func main() {
 			}
 			fmt.Println(pps)
 
-			err = c.UnpairDevice(device.Id)
+			err = device.Unpair()
 			if err != nil {
 				panic(err)
 			}
 
 			// one more try
 			fmt.Println("-- one more try")
-			err = c.PairSetup(device.Id, "031-45-154")
+			err = device.PairSetup("031-45-154")
 			if err != nil {
 				panic(err)
 			}
-			err = c.PairVerify(device.Id)
+			err = device.PairVerify()
 			if err != nil {
 				panic(err)
 			}
 
-			err = c.UnpairDevice(device.Id)
+			err = device.Unpair()
 			if err != nil {
 				panic(err)
 			}
@@ -168,7 +188,8 @@ func main() {
 		},
 		func(e *dnssd.BrowseEntry, d *hkontroller.Device) {
 			fmt.Println("pairing disappeared")
-			fmt.Println(d.DiscoverAccessories())
+			fmt.Println(d.GetAccessories())
+			fmt.Println("found accessories: ", len(d.Accessories()))
 		},
 	)
 

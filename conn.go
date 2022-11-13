@@ -185,8 +185,8 @@ func (c *conn) loop() {
 	for !c.closed {
 		b, err := rd.Peek(5) // len of EVENT string
 		if err != nil {
-			fmt.Println(err)
-			continue
+			fmt.Println("backgroundRead err: ", err)
+			break
 		}
 		if string(b) == eventHeader {
 			rt := newEventTransformer(c, rd)
@@ -231,26 +231,4 @@ func (c *conn) loop() {
 			c.response <- res
 		}
 	}
-}
-
-// RoundTrip implementation to be able to use with http.Client
-func (d *Device) RoundTrip(req *http.Request) (*http.Response, error) {
-
-	err := req.Write(d.cc)
-	if err != nil {
-		return nil, err
-	}
-
-	if d.cc.inBackground {
-		res := <-d.cc.response
-		return res, nil
-	}
-
-	rd := bufio.NewReader(d.cc)
-	res, err := http.ReadResponse(rd, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
 }
