@@ -3,7 +3,6 @@ package hkontroller
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -140,11 +139,9 @@ const (
 // Read reads bytes from the connection.
 // The read bytes are decrypted when possible.
 func (c *conn) Read(b []byte) (int, error) {
-	fmt.Println("conn read")
 	if c.ss == nil {
 		n, err := c.Conn.Read(b)
 		if err != nil {
-			fmt.Println("conn read err ", err)
 			c.closed = true
 			c.Conn.Close()
 		}
@@ -155,10 +152,8 @@ func (c *conn) Read(b []byte) (int, error) {
 		r := bufio.NewReader(c.Conn)
 		buf, err := c.ss.Decrypt(r)
 		if err != nil {
-			fmt.Println("conn ss read err ", err)
 			if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 				// Ignore timeout error #77
-				fmt.Println("err timeout")
 			} else { // if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 				c.closed = true
 				c.Conn.Close()
@@ -185,7 +180,6 @@ func (c *conn) loop() {
 	for !c.closed {
 		b, err := rd.Peek(len(eventHeader)) // len of EVENT string
 		if err != nil {
-			fmt.Println("backgroundRead err: ", err)
 			c.closed = true
 			break
 		}
@@ -195,13 +189,11 @@ func (c *conn) loop() {
 
 			res, err := http.ReadResponse(rb, nil)
 			if err != nil {
-				fmt.Println(err)
 				continue
 			}
 
 			all, err := io.ReadAll(res.Body)
 			if err != nil {
-				fmt.Println(err)
 				continue
 			}
 
@@ -216,13 +208,11 @@ func (c *conn) loop() {
 		} else {
 			res, err := http.ReadResponse(rd, nil)
 			if err != nil {
-				fmt.Println(err)
 				continue
 			}
 			// ReadAll here because if response is chunked then on next loop there will be error
 			all, err := io.ReadAll(res.Body)
 			if err != nil {
-				fmt.Println("err: ", err)
 				continue
 			}
 
