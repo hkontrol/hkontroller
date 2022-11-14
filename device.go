@@ -104,8 +104,24 @@ func (d *Device) doGet(url string) (*http.Response, error) {
 }
 
 func (d *Device) emit(topic string, args ...interface{}) {
-	fmt.Println("d.emitt: ", topic)
+	fmt.Println("d.emit: ", topic)
 	d.ee.Emit(topic, args...)
+}
+
+func (d *Device) OnConnect() <-chan emitter.Event {
+	return d.ee.On("connect")
+}
+func (d *Device) OnClose() <-chan emitter.Event {
+	return d.ee.On("close")
+}
+func (d *Device) OnPaired() <-chan emitter.Event {
+	return d.ee.On("paired")
+}
+func (d *Device) OnVerified() <-chan emitter.Event {
+	return d.ee.On("verified")
+}
+func (d *Device) OnUnpaired() <-chan emitter.Event {
+	return d.ee.On("unpaired")
 }
 
 func (d *Device) close() error {
