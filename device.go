@@ -15,10 +15,8 @@ import (
 	"time"
 )
 
-type eventCallback func(*emitter.Event)
-
 type Device struct {
-	emitter.Emitter
+	ee emitter.Emitter
 
 	Id string
 
@@ -77,31 +75,37 @@ func newDevice(id string, controllerId string, controllerLTPK []byte, controller
 		controllerId:   controllerId,
 		controllerLTPK: controllerLTPK,
 		controllerLTSK: controllerLTSK,
-		Emitter:        emitter.Emitter{},
+		ee:             emitter.Emitter{},
 	}
-	// flat callbacks
-	d.Use("*", emitter.Void)
+
+	//d.Use("*", emitter.Sync)
+	// TODO emitter use channels
 
 	return d
 }
 
 func (d *Device) doRequest(req *http.Request) (*http.Response, error) {
-	if d.httpc == nil || d.cc == nil {
+	if d.httpc == nil || d.cc.closed {
 		return nil, errors.New("no http client available")
 	}
 	return d.httpc.Do(req)
 }
 func (d *Device) doPost(url string, contentType string, body io.Reader) (*http.Response, error) {
-	if d.httpc == nil || d.cc == nil {
+	if d.httpc == nil || d.cc.closed {
 		return nil, errors.New("no http client available")
 	}
 	return d.httpc.Post(url, contentType, body)
 }
 func (d *Device) doGet(url string) (*http.Response, error) {
-	if d.httpc == nil || d.cc == nil {
+	if d.httpc == nil || d.cc.closed {
 		return nil, errors.New("no http client available")
 	}
 	return d.httpc.Get(url)
+}
+
+func (d *Device) emit(topic string, args ...interface{}) {
+	fmt.Println("d.emitt: ", topic)
+	d.ee.Emit(topic, args...)
 }
 
 func (d *Device) close() error {
@@ -109,7 +113,8 @@ func (d *Device) close() error {
 	d.httpc = nil
 
 	err := d.cc.Conn.Close()
-	d.Emit("close")
+	fmt.Println("emitting close from d.close()")
+	d.emit("close")
 	return err
 }
 
@@ -117,7 +122,7 @@ func (d *Device) connect() error {
 
 	if d.cc != nil {
 		fmt.Println("device.connect closing old connection ")
-		d.close()
+		d.cc.Conn.Close()
 		fmt.Println("device.connect old connection closed")
 	}
 	d.verified = false
@@ -140,7 +145,9 @@ func (d *Device) connect() error {
 
 	fmt.Println("device.connect returning from func")
 
-	d.Emit("connect")
+	fmt.Println("emitting connect")
+	d.emit("connect")
+	fmt.Println("returning from device.connect()")
 
 	return nil
 }
@@ -149,7 +156,8 @@ func (d *Device) startBackgroundRead() {
 	d.cc.inBackground = true
 	go func() {
 		d.cc.loop()
-		d.Emit("disconnect")
+		fmt.Println("emitting close from bg read")
+		d.emit("close")
 	}()
 }
 
@@ -299,12 +307,20 @@ func (d *Device) onEvent(res *http.Response) {
 		val := ch.Value
 
 		topic := fmt.Sprintf("event %d %d", aid, iid)
-		fmt.Println("emitting ", topic, aid, iid, val)
-		d.Emit(topic, aid, iid, val)
+		d.emit(topic, aid, iid, val)
 	}
 }
 
-func (d *Device) SubscribeToEvents(aid uint64, iid uint64, callback eventCallback) error {
+func (d *Device) SubscribeToEvents(aid uint64, iid uint64) (<-chan emitter.Event, error) {
+	topic := fmt.Sprintf("event %d %d", aid, iid)
+
+	for _, tt := range d.ee.Topics() {
+		if tt == topic {
+			// already subscribed
+			// support multiple listeners
+			return d.ee.On(topic), nil
+		}
+	}
 
 	type putPayload struct {
 		Cs []CharacteristicPut `json:"characteristics"`
@@ -314,31 +330,35 @@ func (d *Device) SubscribeToEvents(aid uint64, iid uint64, callback eventCallbac
 	c := putPayload{Cs: []CharacteristicPut{{Aid: aid, Iid: iid, Events: &ev}}}
 	b, err := json.Marshal(c)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req, err := http.NewRequest("PUT", "/characteristics", bytes.NewReader(b))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	res, err := d.doRequest(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if res.StatusCode != http.StatusNoContent {
-		return errors.New("not 204")
+		return nil, errors.New("not 204")
 	}
 
-	topic := fmt.Sprintf("event %d %d", aid, iid)
-	fmt.Println("d.on ", topic)
-	d.On(topic, callback)
-
-	return nil
+	return d.ee.On(topic), nil
 }
 
-func (d *Device) UnsubscribeFromEvents(aid uint64, iid uint64) error {
+func (d *Device) UnsubscribeFromEvents(aid uint64, iid uint64, channels ...<-chan emitter.Event) error {
+
+	topic := fmt.Sprintf("event %d %d", aid, iid)
+
+	if len(channels) < len(d.ee.Listeners(topic)) {
+		// somebody else subscribed
+		d.ee.Off(topic, channels...)
+		return nil
+	}
 
 	type putPayload struct {
 		Cs []CharacteristicPut `json:"characteristics"`
@@ -361,8 +381,7 @@ func (d *Device) UnsubscribeFromEvents(aid uint64, iid uint64) error {
 		return err
 	}
 
-	topic := fmt.Sprintf("event %d %d", aid, iid)
-	d.Off(topic)
+	d.ee.Off(topic)
 
 	return nil
 }

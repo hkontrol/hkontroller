@@ -86,7 +86,21 @@ func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Devic
 			pairing := Pairing{Name: id}
 			c.devices[id].pairing = pairing
 			dd = c.devices[id]
+			devPairedCh := dd.ee.On("paired")
+			go func() {
+				for _ = range devPairedCh {
+					c.st.SavePairing(dd.pairing)
+				}
+			}()
+
+			devUnpairedCh := dd.ee.On("unpaired")
+			go func() {
+				for _ = range devUnpairedCh {
+					c.st.DeletePairing(dd.Id)
+				}
+			}()
 		}
+
 		c.mu.Unlock()
 
 		dd.discovered = true
@@ -219,6 +233,22 @@ func (c *Controller) LoadPairings() error {
 		c.devices[id] = newDevice(id, c.name, c.localLTKP, c.localLTSK)
 		c.devices[id].pairing = p
 		c.devices[id].paired = true
+
+		dd := c.devices[id]
+
+		devPairedCh := dd.ee.On("paired")
+		go func() {
+			for _ = range devPairedCh {
+				c.st.SavePairing(dd.pairing)
+			}
+		}()
+
+		devUnpairedCh := dd.ee.On("unpaired")
+		go func() {
+			for _ = range devUnpairedCh {
+				c.st.DeletePairing(dd.Id)
+			}
+		}()
 	}
 
 	return nil

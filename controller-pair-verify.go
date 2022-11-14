@@ -191,7 +191,7 @@ func (d *Device) PairVerify() error {
 
 	d.startBackgroundRead()
 
-	d.Emit("verified")
+	d.emit("verified")
 
 	return nil
 }

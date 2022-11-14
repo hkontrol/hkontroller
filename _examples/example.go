@@ -20,19 +20,22 @@ func main() {
 	// load from store
 	_ = c.LoadPairings()
 
+	fmt.Println("loaded?")
+
 	c.StartDiscovering(
 		func(e *dnssd.BrowseEntry, device *hkontroller.Device) {
 			fmt.Println("discovered ", device.Id)
-			//if device.Id != "28:EF:D2:66:94:C2" {
-			//	return
-			//}
-			err = device.PairSetup("031-45-154")
-			if err != nil {
-				panic(err)
+			if !device.IsPaired() {
+				err = device.PairSetup("031-45-154")
+				if err != nil {
+					panic(err)
+				}
 			}
-			err = device.PairVerify()
-			if err != nil {
-				panic(err)
+			if !device.IsVerified() {
+				err = device.PairVerify()
+				if err != nil {
+					panic(err)
+				}
 			}
 
 			p := c.GetDevice(device.Id)
@@ -79,21 +82,24 @@ func main() {
 							return
 						}
 						fmt.Println("current temp: ", val)
-						err = device.SubscribeToEvents(a.Id, ts.Iid, func(e *emitter.Event) {
-							aid := e.Args[0]
-							iid := e.Args[1]
-							value := e.Args[2]
-							fmt.Println("subscribe cb: ", aid, iid, value)
-						})
-						go func() {
-							time.Sleep(60 * time.Second)
-							fmt.Println("unsubscribing from event")
-							err := device.UnsubscribeFromEvents(a.Id, ts.Iid)
-							if err != nil {
-								fmt.Println("unsubscribe err: ", err)
-								return
-							}
-						}()
+						subCh, err := device.SubscribeToEvents(a.Id, ts.Iid)
+						if err == nil {
+							go func() {
+								for e := range subCh {
+									fmt.Println("subCb: ", e.Args)
+								}
+								fmt.Println("subCb channel closed!")
+							}()
+							go func(aid, iid uint64, ch <-chan emitter.Event) {
+								time.Sleep(30 * time.Second)
+								fmt.Println("unsubscribing from event ", aid, iid)
+								err := device.UnsubscribeFromEvents(aid, iid, ch)
+								if err != nil {
+									fmt.Println("unsubscribe err: ", err)
+									return
+								}
+							}(a.Id, ts.Iid, subCh)
+						}
 					}
 				}
 
@@ -122,12 +128,24 @@ func main() {
 							}
 							fmt.Println("got char value: ", val)
 
-							err = device.SubscribeToEvents(a.Id, on.Iid, func(e *emitter.Event) {
-								aid := e.Args[0]
-								iid := e.Args[1]
-								value := e.Args[2]
-								fmt.Println("subs cb: ", aid, iid, value)
-							})
+							subCh, err := device.SubscribeToEvents(a.Id, on.Iid)
+							if err == nil {
+								go func() {
+									for e := range subCh {
+										fmt.Println("subCb: ", e.Args)
+									}
+									fmt.Println("subCb channel closed!")
+								}()
+								go func(aid, iid uint64, ch <-chan emitter.Event) {
+									time.Sleep(30 * time.Second)
+									fmt.Println("unsubscribing from event ", aid, iid)
+									err := device.UnsubscribeFromEvents(aid, iid, ch)
+									if err != nil {
+										fmt.Println("unsubscribe err: ", err)
+										return
+									}
+								}(a.Id, on.Iid, subCh)
+							}
 
 							//time.Sleep(1 * time.Second)
 
@@ -142,7 +160,7 @@ func main() {
 				}
 			}
 
-			time.Sleep(3 * time.Minute)
+			time.Sleep(70 * time.Second)
 			keypair, err := hkontroller.GenerateKeyPair()
 			if err != nil {
 				panic(err)
@@ -158,6 +176,17 @@ func main() {
 			}
 
 			pps, err := device.ListPairings()
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println(pps)
+
+			err = device.PairRemove("another device")
+			if err != nil {
+				panic(err)
+			}
+
+			pps, err = device.ListPairings()
 			if err != nil {
 				panic(err)
 			}

@@ -21,28 +21,17 @@ type pairRemoveResPayload struct {
 	Error byte `tlv8:"7"`
 }
 
-func (d *Device) Unpair() error {
+func (d *Device) PairRemove(controllerId string) error {
 
 	pl := pairRemoveReqPayload{
 		State:      M1,
 		Method:     MethodDeletePairing,
-		Identifier: d.controllerId,
+		Identifier: controllerId,
 	}
 	b, err := tlv8.Marshal(pl)
 	if err != nil {
 		return err
 	}
-
-	defer func() {
-		d.cc.Close()
-		d.httpc = nil
-		d.cc = nil
-		d.paired = false
-		d.verified = false
-		d.httpc = nil
-		d.Emit("unpaired")
-		d.Emit("close")
-	}()
 
 	resp, err := d.doPost("/pairings", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
@@ -70,4 +59,16 @@ func (d *Device) Unpair() error {
 	}
 
 	return nil
+}
+
+func (d *Device) Unpair() error {
+	defer func() {
+		d.paired = false
+		d.verified = false
+
+		d.close()
+
+		d.emit("unpaired")
+	}()
+	return d.PairRemove(d.controllerId)
 }

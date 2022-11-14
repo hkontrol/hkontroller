@@ -290,6 +290,6 @@ func (d *Device) PairSetup(pin string) error {
 	}
 	d.paired = true
 	d.verified = false
-	d.Emit("paired")
+	d.emit("paired")
 	return nil
 }

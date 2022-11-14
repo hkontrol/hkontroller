@@ -183,9 +183,10 @@ func (c *conn) loop() {
 	rd := bufio.NewReader(c)
 
 	for !c.closed {
-		b, err := rd.Peek(5) // len of EVENT string
+		b, err := rd.Peek(len(eventHeader)) // len of EVENT string
 		if err != nil {
 			fmt.Println("backgroundRead err: ", err)
+			c.closed = true
 			break
 		}
 		if string(b) == eventHeader {
