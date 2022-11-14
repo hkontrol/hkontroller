@@ -153,9 +153,6 @@ func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Devic
 
 		if ok {
 			dd.close()
-			dd.discovered = false
-			dd.verified = false
-			dd.httpc = nil
 			onRemove(&e, dd)
 		}
 	}

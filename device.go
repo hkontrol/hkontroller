@@ -104,7 +104,6 @@ func (d *Device) doGet(url string) (*http.Response, error) {
 }
 
 func (d *Device) emit(topic string, args ...interface{}) {
-	fmt.Println("d.emit: ", topic)
 	d.ee.Emit(topic, args...)
 }
 
@@ -125,11 +124,14 @@ func (d *Device) OnUnpaired() <-chan emitter.Event {
 }
 
 func (d *Device) close() error {
-	d.cc.closed = true
+	var err error
+	if d.cc != nil {
+		d.cc.closed = true
+		err = d.cc.Conn.Close()
+	}
+	d.verified = false
 	d.httpc = nil
 
-	err := d.cc.Conn.Close()
-	fmt.Println("emitting close from d.close()")
 	d.emit("close")
 	return err
 }
@@ -137,19 +139,14 @@ func (d *Device) close() error {
 func (d *Device) connect() error {
 
 	if d.cc != nil {
-		fmt.Println("device.connect closing old connection ")
 		d.cc.Conn.Close()
-		fmt.Println("device.connect old connection closed")
 	}
 	d.verified = false
 
-	fmt.Println("device.connect dialing ", d.tcpAddr)
 	dial, err := net.DialTimeout("tcp", d.tcpAddr, time.Second)
 	if err != nil {
-		fmt.Println("device.connect: ", err)
 		return err
 	}
-	fmt.Println("device.connect dial success")
 
 	// connection, http client
 	cc := newConn(dial)
@@ -159,11 +156,7 @@ func (d *Device) connect() error {
 	}
 	d.cc.SetEventCallback(d.onEvent)
 
-	fmt.Println("device.connect returning from func")
-
-	fmt.Println("emitting connect")
 	d.emit("connect")
-	fmt.Println("returning from device.connect()")
 
 	return nil
 }
@@ -172,8 +165,7 @@ func (d *Device) startBackgroundRead() {
 	d.cc.inBackground = true
 	go func() {
 		d.cc.loop()
-		fmt.Println("emitting close from bg read")
-		d.emit("close")
+		d.close()
 	}()
 }
 
