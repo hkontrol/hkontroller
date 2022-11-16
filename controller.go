@@ -3,13 +3,11 @@ package hkontroller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"net"
-	"sort"
-	"sync"
-	"time"
-
 	"github.com/brutella/dnssd"
+	_ "github.com/brutella/dnssd/log"
+	"sync"
 )
 
 type pairSetupPayload struct {
@@ -69,8 +67,13 @@ func NewController(store Store, name string) (*Controller, error) {
 	}, nil
 }
 
-func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Device), onRemove func(*dnssd.BrowseEntry, *Device)) {
+func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
+
+	discoverCh := make(chan *Device)
+	lostCh := make(chan *Device)
+
 	addFn := func(e dnssd.BrowseEntry) {
+
 		// CC:22:3D:E3:CE:65 example of id
 		id, ok := e.Text["id"]
 		if !ok {
@@ -82,63 +85,31 @@ func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Devic
 		dd, ok := c.devices[id]
 		if !ok {
 			// not exist - init one
-			c.devices[id] = newDevice(id, c.name, c.localLTKP, c.localLTSK)
+			c.devices[id] = newDevice(&e, id, c.name, c.localLTKP, c.localLTSK)
 			pairing := Pairing{Name: id}
 			c.devices[id].pairing = pairing
 			dd = c.devices[id]
 			devPairedCh := dd.ee.On("paired")
 			go func() {
-				for _ = range devPairedCh {
+				for range devPairedCh {
 					c.st.SavePairing(dd.pairing)
 				}
 			}()
 
 			devUnpairedCh := dd.ee.On("unpaired")
 			go func() {
-				for _ = range devUnpairedCh {
+				for range devUnpairedCh {
 					c.st.DeletePairing(dd.Id)
 				}
 			}()
+		} else {
+			c.devices[id].dnssdBrowseEntry = &e
 		}
-
-		c.mu.Unlock()
 
 		dd.discovered = true
-		if len(e.IPs) == 0 {
-			return
-		}
-
-		sort.Slice(e.IPs, func(i, j int) bool {
-			return e.IPs[i].To4() != nil // ip4 first
-		})
-
-		var devTcpAddr string
-		var devHttpUrl string
-		// probe every ip tcpAddr
-		for _, ip := range e.IPs {
-			if ip.To4() == nil {
-				// ipv6 tcpAddr in square brackets
-				// [fe80::...%wlp2s0]:51510
-				devTcpAddr = fmt.Sprintf("[%s%%%s]:%d", ip.String(), e.IfaceName, e.Port)
-				devHttpUrl = fmt.Sprintf("http://[%s]:%d", ip.String(), e.Port)
-			} else {
-				devTcpAddr = fmt.Sprintf("%s:%d", ip.String(), e.Port)
-				devHttpUrl = fmt.Sprintf("http://%s", devTcpAddr)
-			}
-			dial, err := net.DialTimeout("tcp", devTcpAddr, 1000*time.Millisecond)
-			if err != nil {
-				continue
-			}
-			// connection ok, close it and break the loop
-			dial.Close()
-			break
-		}
-
-		dd.tcpAddr = devTcpAddr
-		dd.httpAddr = devHttpUrl
-
+		c.mu.Unlock()
 		// end section tcp conn
-		onDiscover(&e, dd)
+		discoverCh <- dd
 	}
 
 	rmvFn := func(e dnssd.BrowseEntry) {
@@ -152,19 +123,32 @@ func (c *Controller) StartDiscovering(onDiscover func(*dnssd.BrowseEntry, *Devic
 		c.mu.Unlock()
 
 		if ok {
+			dd.discovered = false
+			dd.dnssdBrowseEntry = nil
+			dd.emit("lost")
 			dd.close()
-			onRemove(&e, dd)
+			lostCh <- dd
 		}
 	}
 
 	go func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		c.cancelDiscovering = cancel
-		if err := dnssd.LookupType(ctx, "_hap._tcp.local.", addFn, rmvFn); err != nil {
-			return
+		defer func() {
+			close(discoverCh)
+			close(lostCh)
+		}()
+		for {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			c.cancelDiscovering = cancel
+			if err := dnssd.LookupType(ctx, "_hap._tcp.local.", addFn, rmvFn); err != nil {
+				if errors.Is(err, context.Canceled) {
+					return
+				}
+				continue
+			}
 		}
 	}()
+	return discoverCh, lostCh
 }
 
 func (c *Controller) SavePairings(s Store) error {
@@ -227,7 +211,7 @@ func (c *Controller) LoadPairings() error {
 	pp := c.st.Pairings()
 	for _, p := range pp {
 		id := p.Name
-		c.devices[id] = newDevice(id, c.name, c.localLTKP, c.localLTSK)
+		c.devices[id] = newDevice(nil, id, c.name, c.localLTKP, c.localLTSK)
 		c.devices[id].pairing = p
 		c.devices[id].paired = true
 
@@ -235,14 +219,14 @@ func (c *Controller) LoadPairings() error {
 
 		devPairedCh := dd.ee.On("paired")
 		go func() {
-			for _ = range devPairedCh {
+			for range devPairedCh {
 				c.st.SavePairing(dd.pairing)
 			}
 		}()
 
 		devUnpairedCh := dd.ee.On("unpaired")
 		go func() {
-			for _ = range devUnpairedCh {
+			for range devUnpairedCh {
 				c.st.DeletePairing(dd.Id)
 			}
 		}()

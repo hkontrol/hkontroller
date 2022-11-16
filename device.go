@@ -3,22 +3,28 @@ package hkontroller
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/brutella/dnssd"
 	"github.com/olebedev/emitter"
 	"io"
-	"net"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
 )
 
+const dialTimeout = 5 * time.Second
+const emitTimeout = 5 * time.Second
+
 type Device struct {
 	ee emitter.Emitter
 
 	Id string
+
+	dnssdBrowseEntry *dnssd.BrowseEntry
 
 	controllerId   string
 	controllerLTPK []byte
@@ -29,9 +35,6 @@ type Device struct {
 	discovered bool // discovered via mdns?
 	paired     bool // completed /pair-setup?
 	verified   bool // is connection established after /pair-verify?
-
-	tcpAddr  string // tcp socket address
-	httpAddr string // tcp socket address
 
 	cc    *conn
 	ss    *session
@@ -69,17 +72,17 @@ func (r *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	return res, nil
 }
 
-func newDevice(id string, controllerId string, controllerLTPK []byte, controllerLTSK []byte) *Device {
-	d := &Device{
-		Id:             id,
-		controllerId:   controllerId,
-		controllerLTPK: controllerLTPK,
-		controllerLTSK: controllerLTSK,
-		ee:             emitter.Emitter{},
-	}
+func newDevice(dnssdEntry *dnssd.BrowseEntry, id string,
+	controllerId string, controllerLTPK []byte, controllerLTSK []byte) *Device {
 
-	//d.Use("*", emitter.Sync)
-	// TODO emitter use channels
+	d := &Device{
+		dnssdBrowseEntry: dnssdEntry,
+		Id:               id,
+		controllerId:     controllerId,
+		controllerLTPK:   controllerLTPK,
+		controllerLTSK:   controllerLTSK,
+		ee:               emitter.Emitter{},
+	}
 
 	return d
 }
@@ -104,33 +107,75 @@ func (d *Device) doGet(url string) (*http.Response, error) {
 }
 
 func (d *Device) emit(topic string, args ...interface{}) {
-	d.ee.Emit(topic, args...)
+	done := d.ee.Emit(topic, args...)
+	select {
+	case <-done:
+		// so the sending is done
+	case <-time.After(emitTimeout):
+		fmt.Println("emit timeout for event: ", topic) // TODO examine
+		// time is out, let's discard emitting
+		close(done)
+	}
 }
 
+func (d *Device) OnDiscovered() <-chan emitter.Event {
+	return d.ee.On("discover")
+}
+func (d *Device) OffDiscovered(ch <-chan emitter.Event) {
+	d.ee.Off("discovered", ch)
+}
+func (d *Device) OnLost() <-chan emitter.Event {
+	return d.ee.On("lost")
+}
+func (d *Device) OffLost(ch <-chan emitter.Event) {
+	d.ee.Off("lost", ch)
+}
 func (d *Device) OnConnect() <-chan emitter.Event {
 	return d.ee.On("connect")
+}
+func (d *Device) OffConnect(ch <-chan emitter.Event) {
+	d.ee.Off("connect", ch)
+}
+func (d *Device) OnError() <-chan emitter.Event {
+	return d.ee.On("error")
+}
+func (d *Device) OffError(ch <-chan emitter.Event) {
+	d.ee.Off("error", ch)
 }
 func (d *Device) OnClose() <-chan emitter.Event {
 	return d.ee.On("close")
 }
+func (d *Device) OffClose(ch <-chan emitter.Event) {
+	d.ee.Off("close", ch)
+}
 func (d *Device) OnPaired() <-chan emitter.Event {
 	return d.ee.On("paired")
+}
+func (d *Device) OffPaired(ch <-chan emitter.Event) {
+	d.ee.Off("paired", ch)
 }
 func (d *Device) OnVerified() <-chan emitter.Event {
 	return d.ee.On("verified")
 }
+func (d *Device) OffVerified(ch <-chan emitter.Event) {
+	d.ee.Off("verified", ch)
+}
 func (d *Device) OnUnpaired() <-chan emitter.Event {
 	return d.ee.On("unpaired")
+}
+func (d *Device) OffUnpaired(ch <-chan emitter.Event) {
+	d.ee.Off("unpaired", ch)
 }
 
 func (d *Device) close() error {
 	var err error
 	if d.cc != nil {
-		d.cc.closed = true
-		err = d.cc.Conn.Close()
+		d.cc.close()
 	}
 	d.verified = false
 	d.httpc = nil
+
+	d.ee.Off("event*") // close all subscriptions to char events
 
 	d.emit("close")
 	return err
@@ -143,8 +188,14 @@ func (d *Device) connect() error {
 	}
 	d.verified = false
 
-	dial, err := net.DialTimeout("tcp", d.tcpAddr, time.Second)
+	if d.dnssdBrowseEntry == nil {
+		d.emit("error", errors.New("not discovered"))
+		return errors.New("not discovered")
+	}
+
+	dial, err := dialServiceInstance(context.Background(), d.dnssdBrowseEntry, dialTimeout)
 	if err != nil {
+		d.emit("error", err)
 		return err
 	}
 

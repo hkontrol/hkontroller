@@ -64,8 +64,6 @@ func newControllerSession(shared [32]byte, d *Device) (*session, error) {
 			discovered: d.discovered,
 			paired:     d.paired,
 			verified:   d.verified,
-			tcpAddr:    d.tcpAddr,
-			httpAddr:   d.httpAddr,
 		},
 	}
 	var err error

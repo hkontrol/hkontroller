@@ -3,11 +3,54 @@ package hkontroller
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"github.com/brutella/dnssd"
 	"io"
 	"net"
 	"net/http"
+	"sort"
 	"sync"
+	"time"
 )
+
+// dialServiceInstance lookup dnssd service and make tcp connection
+func dialServiceInstance(ctx context.Context, e *dnssd.BrowseEntry, dialTimeout time.Duration) (net.Conn, error) {
+
+	IPs := e.IPs
+	sort.Slice(IPs, func(i, j int) bool {
+		return IPs[i].To4() != nil // ip4 first
+	})
+
+	var tcpAddr string
+	// probe every ip tcpAddr
+	for _, ip := range IPs {
+		if ip.To4() == nil {
+			// ipv6 tcpAddr in square brackets
+			// [fe80::...%wlp2s0]:51510
+			tcpAddr = fmt.Sprintf("[%s%%%s]:%d", ip.String(), e.IfaceName, e.Port)
+		} else {
+			tcpAddr = fmt.Sprintf("%s:%d", ip.String(), e.Port)
+		}
+
+		fmt.Println("dialing: ", tcpAddr)
+
+		// use dialer with parent context to be able to cancel connect
+		d := net.Dialer{Timeout: dialTimeout}
+		tcpConn, err := d.DialContext(ctx, "tcp", tcpAddr)
+		if err != nil {
+			fmt.Println("dial err: ", err)
+			continue
+		}
+		fmt.Println("dial good")
+
+		// connection ok, return it
+		return tcpConn, nil
+	}
+
+	return nil, errors.New("no connection available")
+}
 
 const eventHeader = "EVENT"
 
@@ -88,9 +131,16 @@ func newConn(c net.Conn) *conn {
 		smu:      sync.Mutex{},
 		emu:      sync.Mutex{},
 		response: make(chan *http.Response),
+		closed:   false,
 	}
 
 	return cc
+}
+
+func (c *conn) close() {
+	c.closed = true
+	c.inBackground = false
+	c.Conn.Close()
 }
 
 func (c *conn) SetEventCallback(cb func(*http.Response)) {
@@ -109,8 +159,7 @@ func (c *conn) Write(b []byte) (int, error) {
 	if c.ss == nil {
 		n, err := c.Conn.Write(b)
 		if err != nil {
-			c.Conn.Close()
-			c.closed = true
+			c.close()
 			return n, err
 		}
 		return n, err
@@ -121,8 +170,7 @@ func (c *conn) Write(b []byte) (int, error) {
 	enc, err := c.ss.Encrypt(&buf)
 
 	if err != nil {
-		c.closed = true
-		c.Conn.Close()
+		c.close()
 		return 0, err
 	}
 
@@ -142,8 +190,7 @@ func (c *conn) Read(b []byte) (int, error) {
 	if c.ss == nil {
 		n, err := c.Conn.Read(b)
 		if err != nil {
-			c.closed = true
-			c.Conn.Close()
+			c.close()
 		}
 		return n, err
 	}
@@ -155,8 +202,7 @@ func (c *conn) Read(b []byte) (int, error) {
 			if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 				// Ignore timeout error #77
 			} else { // if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
-				c.closed = true
-				c.Conn.Close()
+				c.close()
 			}
 			return 0, err
 		}
@@ -180,7 +226,7 @@ func (c *conn) loop() {
 	for !c.closed {
 		b, err := rd.Peek(len(eventHeader)) // len of EVENT string
 		if err != nil {
-			c.closed = true
+			c.close()
 			break
 		}
 		if string(b) == eventHeader {

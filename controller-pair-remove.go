@@ -62,12 +62,14 @@ func (d *Device) PairRemove(controllerId string) error {
 }
 
 func (d *Device) Unpair() error {
+	fmt.Println("d.Unpair()")
 	defer func() {
+
+		d.pairing = Pairing{}
 		d.paired = false
 		d.verified = false
 
-		d.close()
-
+		fmt.Println("defer Unpair: emit unpaired")
 		d.emit("unpaired")
 	}()
 	return d.PairRemove(d.controllerId)

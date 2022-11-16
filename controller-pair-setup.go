@@ -270,9 +270,17 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 
 func (d *Device) PairSetup(pin string) error {
 
-	err := d.connect()
-	if err != nil {
-		return err
+	if d.cc == nil {
+		err := d.connect()
+		if err != nil {
+			return err
+		}
+	}
+	if d.cc.closed {
+		err := d.connect()
+		if err != nil {
+			return err
+		}
 	}
 	// tcp conn open
 
