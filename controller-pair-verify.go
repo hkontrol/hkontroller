@@ -34,6 +34,12 @@ func (d *Device) PairVerify() error {
 	if !d.paired {
 		return errors.New("device not paired")
 	}
+	if d.cc == nil {
+		err := d.connect()
+		if err != nil {
+			return err
+		}
+	}
 	if d.cc.closed {
 		err := d.connect()
 		if err != nil {
