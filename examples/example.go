@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/hkontrol/hkontroller"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/hkontrol/hkontroller"
 )
 
 func main() {
@@ -175,19 +176,35 @@ func main() {
 					fmt.Println("cannot find Name characteristic for info service of acc #", a.Id)
 					continue
 				}
-				fmt.Println("#", a.Id, "--", nameC.Value)
+				fmt.Println()
+				fmt.Println("#", a.Id, nameC.Value)
 
 				for i, s := range a.Ss {
-					fmt.Println("    |-- service: ", s.Type)
-					for _, c := range s.Cs {
-						if i == len(a.Ss)-1 {
-							fmt.Println("       |-- characteristic #", c.Iid, "\t[", c.Type, "] \t value:", c.Value)
+					if i < len(a.Ss)-1 {
+						fmt.Println("    │")
+						fmt.Println("    ├─service: ", s.Type)
+					} else {
+						fmt.Println("    │")
+						fmt.Println("    └─service: ", s.Type)
+					}
+					for j, c := range s.Cs {
+						if j < len(s.Cs)-1 {
+							if i == len(a.Ss)-1 {
+								fmt.Println("       ├─ characteristic #", c.Iid, "\t[", c.Type, "] = ", c.Value)
+							} else {
+								fmt.Println("    │  ├─ characteristic #", c.Iid, "\t[", c.Type, "] = ", c.Value)
+							}
 						} else {
-							fmt.Println("    |  |-- characteristic #", c.Iid, "\t[", c.Type, "] \t value:", c.Value)
+							if i == len(a.Ss)-1 {
+								fmt.Println("       └─ characteristic #", c.Iid, "\t[", c.Type, "] = ", c.Value)
+							} else {
+								fmt.Println("    │  └─ characteristic #", c.Iid, "\t[", c.Type, "] = ", c.Value)
+							}
 						}
 					}
 				}
 			}
+			fmt.Println()
 		} else if strings.HasPrefix(text, "get") {
 			if device == nil {
 				fmt.Println("no device selected")
