@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"github.com/hkontrol/hkontroller/chacha20poly1305"
 	"github.com/hkontrol/hkontroller/curve25519"
 	"github.com/hkontrol/hkontroller/ed25519"
 	"github.com/hkontrol/hkontroller/hkdf"
+	"github.com/hkontrol/hkontroller/log"
 	"github.com/hkontrol/hkontroller/tlv8"
 	"io"
 	"strconv"
@@ -243,6 +243,8 @@ func (d *Device) PairSetupAndVerify(ctx context.Context, pin string, retryTimeou
 // pairVerifyPersist establish encrypted connection with auto-reconnect.
 // Connection broke if device is unpaired. May be cancelled by context as well.
 func (d *Device) pairVerifyPersist(ctx context.Context, retryTimeout time.Duration) error {
+	newCtx, cancel := context.WithCancel(ctx)
+	d.cancelPersistConnection = cancel
 	errorEv := d.OnError()
 	unpairedEv := d.OnUnpaired()
 	closedEv := d.OnClose()
@@ -283,29 +285,31 @@ func (d *Device) pairVerifyPersist(ctx context.Context, retryTimeout time.Durati
 		// catch events
 		select {
 		case <-errorEv:
-			fmt.Println("error event")
+			log.Debug.Println("error event")
 			time.Sleep(retryTimeout)
 			// reconnect
 			continue
 		case <-closedEv:
-			fmt.Println("close event")
+			log.Debug.Println("close event")
 			select {
 			case <-time.After(retryTimeout):
 				// connection was closed, back to reconnect loop
 				continue
 			case <-lostEv:
 				// connection was closed and device is not advertising itself no more
-				fmt.Println("lost event")
+				log.Debug.Println("lost event")
 				return errors.New("lost")
 			}
 		//case <-lostEv:
 		//	fmt.Println("lost event")
 		//	return errors.New("lost")
 		case <-unpairedEv:
-			fmt.Println("unpaired event")
+			d.cancelPersistConnection = nil
+			log.Debug.Println("unpaired event")
 			// in this case we don't need connection anymore
 			return errors.New("unpaired")
-		case <-ctx.Done():
+		case <-newCtx.Done():
+			d.cancelPersistConnection = nil
 			d.close()
 			return errors.New("cancelled")
 		}

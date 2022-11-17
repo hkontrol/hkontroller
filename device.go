@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/brutella/dnssd"
+	"github.com/hkontrol/hkontroller/log"
 	"github.com/olebedev/emitter"
 	"io"
 	"net/http"
@@ -36,6 +37,8 @@ type Device struct {
 	discovered bool // discovered via mdns?
 	paired     bool // completed /pair-setup?
 	verified   bool // is connection established after /pair-verify?
+
+	cancelPersistConnection context.CancelFunc
 
 	cc    *conn
 	ss    *session
@@ -124,7 +127,7 @@ func (d *Device) emit(topic string, args ...interface{}) {
 	case <-done:
 		// so the sending is done
 	case <-time.After(emitTimeout):
-		fmt.Println("emit timeout for event: ", topic) // TODO examine
+		log.Debug.Println("emit timeout for event: ", topic) // TODO examine
 		// time is out, let's discard emitting
 		close(done)
 	}
@@ -191,6 +194,13 @@ func (d *Device) close() error {
 
 	d.emit("close")
 	return err
+}
+
+func (d *Device) Close() error {
+	if d.cancelPersistConnection != nil {
+		d.cancelPersistConnection()
+	}
+	return d.close()
 }
 
 func (d *Device) connect() error {
@@ -425,7 +435,7 @@ func (d *Device) UnsubscribeFromEvents(aid uint64, iid uint64, channels ...<-cha
 
 	topic := fmt.Sprintf("event %d %d", aid, iid)
 
-	if len(channels) < len(d.ee.Listeners(topic)) {
+	if len(channels) != 0 && len(channels) < len(d.ee.Listeners(topic)) {
 		// somebody else subscribed
 		d.ee.Off(topic, channels...)
 		return nil

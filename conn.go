@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/brutella/dnssd"
+	"github.com/hkontrol/hkontroller/log"
 	"io"
 	"net"
 	"net/http"
@@ -34,16 +35,16 @@ func dialServiceInstance(ctx context.Context, e *dnssd.BrowseEntry, dialTimeout 
 			tcpAddr = fmt.Sprintf("%s:%d", ip.String(), e.Port)
 		}
 
-		fmt.Println("dialing: ", tcpAddr)
+		log.Debug.Println("dialing: ", tcpAddr)
 
 		// use dialer with parent context to be able to cancel connect
 		d := net.Dialer{Timeout: dialTimeout}
 		tcpConn, err := d.DialContext(ctx, "tcp", tcpAddr)
 		if err != nil {
-			fmt.Println("dial err: ", err)
+			log.Debug.Println("dial err: ", err)
 			continue
 		}
-		fmt.Println("dial good")
+		log.Debug.Println("dial good")
 
 		// connection ok, return it
 		return tcpConn, nil

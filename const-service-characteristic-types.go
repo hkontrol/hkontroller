@@ -50,6 +50,103 @@ const (
 	SType_WindowCovering                HapServiceType = "8C"
 )
 
+func (h HapServiceType) String() string {
+	switch h {
+	case SType_AccessoryInfo:
+		return "AccessoryInfo"
+	case SType_HapProtocolInfo:
+		return "HapProtocolInfo"
+	case SType_LightBulb:
+		return "LightBulb"
+	case SType_AirPurifier:
+		return "AirPurifier"
+	case SType_AirQualitySensor:
+		return "AirQualitySensor"
+	case SType_AudioStreamManagement:
+		return "AudioStreamManagement"
+	case SType_BatteryService:
+		return "BatteryService"
+	case SType_CameraRTPStreamManagement:
+		return "CameraRTPStreamManagement"
+	case SType_CarbonDioxideSensor:
+		return "CarbonDioxideSensor"
+	case SType_CarbonMonoxideSensor:
+		return "CarbonMonoxideSensor"
+	case SType_ContactSensor:
+		return "ContactSensor"
+	case SType_DataStreamTransportManagement:
+		return "DataStreamTransportManagement"
+	case SType_Door:
+		return "Door"
+	case SType_Doorbell:
+		return "Doorbell"
+	case SType_Fan:
+		return "Fan"
+	case SType_Faucet:
+		return "Faucet"
+	case SType_FilterMaintenance:
+		return "FilterMaintenance"
+	case SType_GarageDoorOpener:
+		return "GarageDoorOpener"
+	case SType_HeaterCooler:
+		return "HeaterCooler"
+	case SType_HumidifierDehumidifier:
+		return "HumidifierDehumidifier"
+	case SType_HumiditySensor:
+		return "HumiditySensor"
+	case SType_IrrigationSystem:
+		return "IrrigationSystem"
+	case SType_LeakSensor:
+		return "LeakSensor"
+	case SType_LightSensor:
+		return "LightSensor"
+	case SType_LockManagement:
+		return "LockManagement"
+	case SType_LockMechanism:
+		return "LockMechanism"
+	case SType_Microphone:
+		return "Microphone"
+	case SType_MotionSensor:
+		return "MotionSensor"
+	case SType_OccupancySensor:
+		return "OccupanceSensor"
+	case SType_Outlet:
+		return "Outlet"
+	case SType_SecuritySystem:
+		return "SecuritySystem"
+	case SType_ServiceLabel:
+		return "ServiceLabel"
+	case SType_Siri:
+		return "Siri"
+	case SType_Slat:
+		return "Slat"
+	case SType_SmokeSensor:
+		return "SmokeSensor"
+	case SType_Speaker:
+		return "Speaker"
+	case SType_StatelessProgrammableSwitch:
+		return "StatelessProgrammableSwitch"
+	case SType_Switch:
+		return "Switch"
+	case SType_TargetControl:
+		return "TargetControl"
+	case SType_TargetControlManagement:
+		return "TargetControlManagement"
+	case SType_TemperatureSensor:
+		return "TemperatureSensor"
+	case SType_Thermostat:
+		return "Thermostat"
+	case SType_Valve:
+		return "Valve"
+	case SType_Window:
+		return "Window"
+	case SType_WindowCovering:
+		return "WindowCovering"
+	}
+
+	return string(h)
+}
+
 type HapCharacteristicType string
 
 const (
@@ -87,7 +184,7 @@ const (
 	CType_CurrentAirPurifierState                   HapCharacteristicType = "A9"
 	CType_CurrentSlatState                          HapCharacteristicType = "AA"
 	CType_CurrentPosition                           HapCharacteristicType = "6D"
-	CType_CurrentVerticalTiltAngle                  HapCharacteristicType = "6D"
+	CType_CurrentVerticalTiltAngle                  HapCharacteristicType = "6E"
 	CType_CurrentHumidifierDehumidifierState        HapCharacteristicType = "B3"
 	CType_CurrentDoorState                          HapCharacteristicType = "E"
 	CType_CurrentFanState                           HapCharacteristicType = "AF"
@@ -180,3 +277,261 @@ const (
 	CType_Volume                                    HapCharacteristicType = "119"
 	CType_WaterLevel                                HapCharacteristicType = "B5"
 )
+
+func (h HapCharacteristicType) String() string {
+	switch h {
+	case CType_Identify:
+		return "Identify"
+	case CType_Manufacturer:
+		return "Manufacturer"
+	case CType_Model:
+		return "Model"
+	case CType_Name:
+		return "Name"
+	case CType_SerialNumber:
+		return "SerialNumber"
+	case CType_Version:
+		return "Version"
+	case CType_FirmwareRevision:
+		return "FirmwareRevision"
+	case CType_HardwareRevision:
+		return "HardwareRevision"
+	case CType_On:
+		return "On"
+	case CType_Brightness:
+		return "Brightness"
+	case CType_AccessoryFlags:
+		return "AccessoryFlags"
+	case CType_Active:
+		return "Active"
+	case CType_ActiveIdentifier:
+		return "ActiveIdentifier"
+	case CType_AdministratorOnlyAccess:
+		return "AdministratorOnlyAccess"
+	case CType_AudioFeedback:
+		return "AudioFeedback"
+	case CType_AirParticulateSize:
+		return "AirParticulateSize"
+	case CType_AirQuality:
+		return "AirQuality"
+	case CType_BatteryLevel:
+		return "BatteryLevel"
+	case CType_ButtonEvent:
+		return "ButtonEvent "
+	case CType_CarbonMonoxideLevel:
+		return "CarbonMonoxideLevel"
+	case CType_CarbonMonoxidePeakLevel:
+		return "CarbonMonoxidePeakLevel"
+	case CType_CarbonMonoxideDetected:
+		return "CarbonMonoxideDetected"
+	case CType_CarbonDioxideLevel:
+		return "CarbonDioxideLevel"
+	case CType_CarbonDioxidePeakLevel:
+		return "CarbonDioxidePeakLevel"
+	case CType_CarbonDioxideDetected:
+		return "CarbonDioxideDetected"
+	case CType_ChargingState:
+		return "ChargingState"
+	case CType_CoolingThresholdTemperature:
+		return "CoolingThresholdTemperature"
+	case CType_ColorTemperature:
+		return "ColorTemperature"
+	case CType_ContactSensorState:
+		return "ContactSensorState"
+	case CType_CurrentAmbientLightLevel:
+		return "CurrentAmbientLightLevel"
+	case CType_CurrentHorizontalTiltAngle:
+		return "CurrentHorizontalTiltAngle"
+	case CType_CurrentAirPurifierState:
+		return "CurrentAirPurifierState"
+	case CType_CurrentSlatState:
+		return "CurrentSlatState"
+	case CType_CurrentPosition:
+		return "CurrentPosition"
+	case CType_CurrentVerticalTiltAngle:
+		return "CurrentVerticalTiltAngle"
+	case CType_CurrentHumidifierDehumidifierState:
+		return "CurrentHumidifierDehumidifierState"
+	case CType_CurrentDoorState:
+		return "CurrentDoorState"
+	case CType_CurrentFanState:
+		return "CurrentFanState"
+	case CType_CurrentHeatingCoolingState:
+		return "CurrentHeatingCoolingState"
+	case CType_CurrentHeaterCoolerState:
+		return "CurrentHeaterCoolerState"
+	case CType_CurrentRelativeHumidity:
+		return "CurrentRelativeHumidity"
+	case CType_CurrentTemperature:
+		return "CurrentTemperature"
+	case CType_CurrentTiltAngle:
+		return "CurrentTiltAngle"
+	case CType_DigitalZoom:
+		return "DigitalZoom "
+	case CType_FilterLifeLevel:
+		return "FilterLifeLevel"
+	case CType_FilterChangeIndication:
+		return "FilterChangeIndication"
+	case CType_HeatingThresholdTemperature:
+		return "HeatingThresholdTemperature"
+	case CType_HoldPosition:
+		return "HoldPosition"
+	case CType_Hue:
+		return "Hue"
+	case CType_ImageRotation:
+		return "ImageRotation "
+	case CType_ImageMirroring:
+		return "ImageMirroring"
+	case CType_InUse:
+		return "InUse"
+	case CType_IsConfigured:
+		return "IsConfigured"
+	case CType_LeakDetected:
+		return "LeakDetected"
+	case CType_LockControlPoint:
+		return "LockControlPoint"
+	case CType_LockCurrentState:
+		return "LockCurrentState"
+	case CType_LockLastKnownAction:
+		return "LockLastKnownAction"
+	case CType_LockManagementAutoSecurityTimeout:
+		return "LockManagementAutoSecurityTimeout"
+	case CType_LockPhysicalControls:
+		return "LockPhysicalControls"
+	case CType_LockTargetState:
+		return "LockTargetState"
+	case CType_Logs:
+		return "Logs"
+	case CType_MotionDetected:
+		return "MotionDetected"
+	case CType_Mute:
+		return "Mute"
+	case CType_NightVision:
+		return "NightVision "
+	case CType_NitrogenDioxideDensity:
+		return "NitrogenDioxideDensity"
+	case CType_ObstructionDetected:
+		return "ObstructionDetected"
+	case CType_PM25Density:
+		return "PM25Density"
+	case CType_OccupancyDetected:
+		return "OccupancyDetected"
+	case CType_OpticalZoom:
+		return "OpticalZoom "
+	case CType_OutletInUse:
+		return "OutletInUse"
+	case CType_OzoneDensity:
+		return "OzoneDensity"
+	case CType_PM10Density:
+		return "PM10Density"
+	case CType_PositionState:
+		return "PositionState"
+	case CType_ProgramMode:
+		return "ProgramMode"
+	case CType_ProgrammableSwitchEvent:
+		return "ProgrammableSwitchEvent"
+	case CType_RelativeHumidityDehumidifierThreshold:
+		return "RelativeHumidityDehumidifierThreshold"
+	case CType_RelativeHumidityHumidifierThreshold:
+		return "RelativeHumidityHumidifierThreshold"
+	case CType_RemainingDuration:
+		return "RemainingDuration"
+	case CType_ResetFilterIndication:
+		return "ResetFilterIndication"
+	case CType_RotationDirection:
+		return "RotationDirection"
+	case CType_RotationSpeed:
+		return "RotationSpeed"
+	case CType_Saturation:
+		return "Saturation"
+	case CType_SecuritySystemAlarmType:
+		return "SecuritySystemAlarmType"
+	case CType_SecuritySystemCurrentState:
+		return "SecuritySystemCurrentState"
+	case CType_SecuritySystemTargetState:
+		return "SecuritySystemTargetState"
+	case CType_SelectedAudioStreamConfiguration:
+		return "SelectedAudioStreamConfiguration"
+	case CType_ServiceLabelIndex:
+		return "ServiceLabelIndex"
+	case CType_ServiceLabelNamespace:
+		return "ServiceLabelNamespace"
+	case CType_SetupDataStreamTransport:
+		return "SetupDataStreamTransport"
+	case CType_SelectedRTPStreamConfiguration:
+		return "SelectedRTPStreamConfiguration"
+	case CType_SetupEndpoints:
+		return "SetupEndpoints"
+	case CType_SiriInputType:
+		return "SiriInputType "
+	case CType_SlatType:
+		return "SlatType"
+	case CType_SmokeDetected:
+		return "SmokeDetected"
+	case CType_StatusActive:
+		return "StatusActive"
+	case CType_StatusFault:
+		return "StatusFault"
+	case CType_StatusJammed:
+		return "StatusJammed"
+	case CType_StatusLowBattery:
+		return "StatusLowBattery"
+	case CType_StatusTampered:
+		return "StatusTampered"
+	case CType_StreamingStatus:
+		return "StreamingStatus "
+	case CType_SupportedAudioStreamConfiguration:
+		return "SupportedAudioStreamConfiguration "
+	case CType_SupportedDataStreamTransportConfiguration:
+		return "SupportedDataStreamTransportConfiguration "
+	case CType_SupportedRTPConfiguration:
+		return "SupportedRTPConfiguration "
+	case CType_SupportedVideoStreamConfiguration:
+		return "SupportedVideoStreamConfiguration "
+	case CType_SulphurDioxideDensity:
+		return "SulphurDioxideDensity"
+	case CType_SwingMode:
+		return "SwingMode"
+	case CType_TargetAirPurifierState:
+		return "TargetAirPurifierState"
+	case CType_TargetFanState:
+		return "TargetFanState"
+	case CType_TargetTiltAngle:
+		return "TargetTiltAngle"
+	case CType_TargetHeaterCoolerState:
+		return "TargetHeaterCoolerState"
+	case CType_SetDuration:
+		return "SetDuration"
+	case CType_TargetControlSupportedConfiguration:
+		return "TargetControlSupportedConfiguration "
+	case CType_TargetControlList:
+		return "TargetControlList "
+	case CType_TargetHorizontalTiltAngle:
+		return "TargetHorizontalTiltAngle"
+	case CType_TargetHumidifierDehumidifierState:
+		return "TargetHumidifierDehumidifierState"
+	case CType_TargetPosition:
+		return "TargetPosition"
+	case CType_TargetDoorState:
+		return "TargetDoorState"
+	case CType_TargetHeatingCoolingState:
+		return "TargetHeatingCoolingState"
+	case CType_TargetRelativeHumidity:
+		return "TargetRelativeHumidity"
+	case CType_TargetTemperature:
+		return "TargetTemperature"
+	case CType_TemperatureDisplayUnits:
+		return "TemperatureDisplayUnits"
+	case CType_TargetVerticalTiltAngle:
+		return "TargetVerticalTiltAngle"
+	case CType_ValveType:
+		return "ValveType"
+	case CType_VOCDensity:
+		return "VOCDensity"
+	case CType_Volume:
+		return "Volume"
+	case CType_WaterLevel:
+		return "WaterLevel"
+	}
+	return string(h)
+}
