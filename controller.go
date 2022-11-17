@@ -103,7 +103,7 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 				}
 			}()
 		} else {
-			c.devices[id].dnssdBrowseEntry = &e
+			c.devices[id].setDnssdEntry(&e)
 		}
 
 		dd.discovered = true
@@ -124,7 +124,7 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 
 		if ok {
 			dd.discovered = false
-			dd.dnssdBrowseEntry = nil
+			dd.setDnssdEntry(nil)
 			dd.emit("lost")
 			dd.close()
 			lostCh <- dd
@@ -170,6 +170,19 @@ func (c *Controller) SavePairings(s Store) error {
 	}
 
 	return nil
+}
+
+// GetAllDevices returns list of all devices loaded or discovered by controller.
+func (c *Controller) GetAllDevices() []*Device {
+	var result []*Device
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, d := range c.devices {
+		result = append(result, d)
+	}
+
+	return result
 }
 
 // GetPairedDevices returns list of devices that has been paired.
