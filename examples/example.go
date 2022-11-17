@@ -35,6 +35,7 @@ func main() {
 		err := d.PairSetupAndVerify(ctx, "pin doesn't matter if already paired", 5*time.Second)
 		if err != nil {
 			writeln("pair-verify err: ", err)
+			return
 		}
 		writeln("should be connected now")
 	}
@@ -152,6 +153,7 @@ func main() {
 			if err != nil {
 				fmt.Println("unpair err: ", err)
 			}
+			fmt.Println("should not be paired anymore")
 		} else if strings.HasPrefix(text, "accessories") {
 			if device == nil {
 				fmt.Println("no device selected")

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/hkontrol/hkontroller/log"
 	"github.com/hkontrol/hkontroller/tlv8"
 	"io"
 	"net/http"
@@ -46,7 +47,6 @@ func (d *Device) PairRemove(controllerId string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("unpairResponse: ", string(all))
 	m2 := pairRemoveResPayload{}
 	err = tlv8.Unmarshal(all, &m2)
 
@@ -62,14 +62,14 @@ func (d *Device) PairRemove(controllerId string) error {
 }
 
 func (d *Device) Unpair() error {
-	fmt.Println("d.Unpair()")
+	log.Debug.Println("d.Unpair()")
 	defer func() {
 
 		d.pairing = Pairing{}
 		d.paired = false
 		d.verified = false
 
-		fmt.Println("defer Unpair: emit unpaired")
+		log.Debug.Println("defer Unpair: emit unpaired")
 		d.emit("unpaired")
 	}()
 	return d.PairRemove(d.controllerId)
