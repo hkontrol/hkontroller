@@ -133,6 +133,11 @@ func (d *Device) emit(topic string, args ...interface{}) {
 	}
 }
 
+func (d *Device) offAllTopics() {
+	for _, t := range d.ee.Topics() {
+		d.ee.Off(t)
+	}
+}
 func (d *Device) OnDiscovered() <-chan emitter.Event {
 	return d.ee.On("discover")
 }

@@ -101,11 +101,13 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 			go func() {
 				for range devUnpairedCh {
 					// if not paired and not discovered, then it should not present anymore
+					// TODO: create separate method
 					c.mu.Lock()
 					if !dd.IsDiscovered() {
 						delete(c.devices, dd.Id)
 					}
 					c.mu.Unlock()
+					dd.offAllTopics()
 					c.st.DeletePairing(dd.Id)
 				}
 			}()
@@ -141,6 +143,7 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 			c.mu.Lock()
 			delete(c.devices, dd.Id)
 			c.mu.Unlock()
+			dd.offAllTopics()
 		}
 	}
 
@@ -259,6 +262,7 @@ func (c *Controller) LoadPairings() error {
 					delete(c.devices, dd.Id)
 				}
 				c.mu.Unlock()
+				dd.offAllTopics()
 				c.st.DeletePairing(dd.Id)
 			}
 		}()
