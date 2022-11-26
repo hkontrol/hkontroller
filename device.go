@@ -43,7 +43,7 @@ type Device struct {
 	cc    *conn
 	ss    *session
 	httpc *http.Client // http client with encryption support
-	accs  *Accessories
+	accs  []*Accessory
 }
 
 type roundTripper struct {
@@ -190,6 +190,8 @@ func (d *Device) close() error {
 	d.verified = false
 	d.httpc = nil
 
+	d.accs = nil
+
 	d.ee.Off("event*") // close all subscriptions to char events
 
 	d.emit("close")
@@ -210,7 +212,7 @@ func (d *Device) connect() error {
 	}
 	d.verified = false
 
-	if d.dnssdBrowseEntry == nil {
+	if d.dnssdBrowseEntry == nil || !d.discovered {
 		d.emit("error", errors.New("not discovered"))
 		return errors.New("not discovered")
 	}
@@ -261,7 +263,7 @@ func (d *Device) IsVerified() bool {
 // Accessories return list of previously discovered accessories.
 // GetAccessories should be called prior to this call.
 func (d *Device) Accessories() []*Accessory {
-	return d.accs.Accs
+	return d.accs
 }
 
 // GetAccessories sends GET /accessories request and store
@@ -304,7 +306,7 @@ func (d *Device) GetAccessories() error {
 		}
 	}
 
-	d.accs = &accs
+	d.accs = accs.Accs
 
 	return nil
 }
@@ -359,10 +361,21 @@ func (d *Device) PutCharacteristic(aid uint64, cid uint64, val interface{}) erro
 		return err
 	}
 
-	_, err = d.doRequest(req)
+	res, err := d.doRequest(req)
 	if err != nil {
 		return err
 	}
+	_ = res
+
+	//all, err := io.ReadAll(res.Body)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	// TODO: extract errors. if response message is empty then no error occured
+	// 		 case of error:
+	//        {"characteristics":[{"aid":1,"iid":12,"status":-70402}]}
+	// fmt.Println(string(all))
 
 	return nil
 }

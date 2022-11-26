@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/brutella/dnssd"
 	_ "github.com/brutella/dnssd/log"
-	"sync"
 )
 
 type pairSetupPayload struct {
@@ -89,16 +90,22 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 			pairing := Pairing{Name: id}
 			c.devices[id].pairing = pairing
 			dd = c.devices[id]
-			devPairedCh := dd.ee.On("paired")
+			devPairedCh := dd.OnPaired()
 			go func() {
 				for range devPairedCh {
 					c.st.SavePairing(dd.pairing)
 				}
 			}()
 
-			devUnpairedCh := dd.ee.On("unpaired")
+			devUnpairedCh := dd.OnUnpaired()
 			go func() {
 				for range devUnpairedCh {
+					// if not paired and not discovered, then it should not present anymore
+					c.mu.Lock()
+					if !dd.IsDiscovered() {
+						delete(c.devices, dd.Id)
+					}
+					c.mu.Unlock()
 					c.st.DeletePairing(dd.Id)
 				}
 			}()
@@ -128,6 +135,12 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 			dd.emit("lost")
 			dd.close()
 			lostCh <- dd
+		}
+		if !dd.IsPaired() {
+			// if not paired and not discovered, then it should not present anymore
+			c.mu.Lock()
+			delete(c.devices, dd.Id)
+			c.mu.Unlock()
 		}
 	}
 
@@ -230,16 +243,22 @@ func (c *Controller) LoadPairings() error {
 
 		dd := c.devices[id]
 
-		devPairedCh := dd.ee.On("paired")
+		devPairedCh := dd.OnPaired()
 		go func() {
 			for range devPairedCh {
 				c.st.SavePairing(dd.pairing)
 			}
 		}()
 
-		devUnpairedCh := dd.ee.On("unpaired")
+		devUnpairedCh := dd.OnUnpaired()
 		go func() {
 			for range devUnpairedCh {
+				// if not paired and not discovered, then it should not present anymore
+				c.mu.Lock()
+				if !dd.IsDiscovered() {
+					delete(c.devices, dd.Id)
+				}
+				c.mu.Unlock()
 				c.st.DeletePairing(dd.Id)
 			}
 		}()
