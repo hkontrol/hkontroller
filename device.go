@@ -18,8 +18,8 @@ import (
 	"time"
 )
 
-const dialTimeout = 5 * time.Second
-const emitTimeout = 5 * time.Second
+const dialTimeout = 1 * time.Second
+const emitTimeout = 1 * time.Second
 
 type Device struct {
 	ee emitter.Emitter
