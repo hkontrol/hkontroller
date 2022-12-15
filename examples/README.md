@@ -10,6 +10,7 @@ One can use `homebridge` with `homebridge-dummy` plugin.
 sudo npm i -g homebridge
 sudo npm i -g homebridge-dummy
 sudo npm i -g homebridge-dummy-thermostat
+sudo npm -g i homebridge-fake-light-bulb
 ```
 
 My `~/.homebridge/config.json`:
@@ -49,6 +50,30 @@ My `~/.homebridge/config.json`:
     {
       "accessory": "Thermostat",
       "name": "Thermostat"
+    },
+    {
+      "name": "Simple Light",
+      "brightness": false,
+      "color": "none",
+      "accessory": "homebridge-fake-light-bulb"
+    },
+    {
+      "name": "Dimmer",
+      "brightness": true,
+      "color": "none",
+      "accessory": "homebridge-fake-light-bulb"
+    },
+    {
+      "name": "RGB",
+      "brightness": true,
+      "color": "hue",
+      "accessory": "homebridge-fake-light-bulb"
+    },
+    {
+      "name": "Light w temp",
+      "brightness": true,
+      "color": "colorTemperature",
+      "accessory": "homebridge-fake-light-bulb"
     }
   ]
 }
