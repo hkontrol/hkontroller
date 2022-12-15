@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -48,14 +49,18 @@ type Device struct {
 
 type roundTripper struct {
 	d *Device
+	mu sync.Mutex
 }
 
 func newRoundTripper(d *Device) *roundTripper {
-	return &roundTripper{d: d}
+	return &roundTripper{d: d, mu: sync.Mutex{}}
 }
 
 // RoundTrip implementation to be able to use with http.Client
 func (r *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	err := req.Write(r.d.cc)
 	if err != nil {
