@@ -71,10 +71,10 @@ func (r *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if r.d.cc.inBackground {
 		// TODO select err or response
 		select {
-			case res := <-r.d.cc.response:
-				return res, err
-			case err := <- r.d.cc.resError:
-				return nil, err
+		case res := <-r.d.cc.response:
+			return res, err
+		case err := <-r.d.cc.resError:
+			return nil, err
 		}
 		//return res, nil
 	}
@@ -254,15 +254,11 @@ func (d *Device) connect() error {
 }
 
 func (d *Device) startBackgroundRead() {
-	fmt.Println("startBackgroundRead")
 	d.cc.inBackground = true
 	go func() {
-		fmt.Println("d.cc.loop()")
 		d.cc.loop()
-		fmt.Println("d.close()?")
 		d.close()
 	}()
-	fmt.Println("should now loop")
 }
 
 // IsDiscovered indicates if device is advertised via multicast dns
@@ -295,18 +291,14 @@ func (d *Device) GetAccessories() error {
 		return errors.New("paired device not verified or not connected")
 	}
 
-	fmt.Println("doGet /accessories")
 	res, err := d.doGet("/accessories")
-	fmt.Println("doGet err ", err)
 	if err != nil {
 		return err
 	}
 	all, err := io.ReadAll(res.Body)
-	fmt.Println("readAll err ", err)
 	if err != nil {
 		return err
 	}
-	fmt.Println(string(all))
 
 	var accs Accessories
 	err = json.Unmarshal(all, &accs)
