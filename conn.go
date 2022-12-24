@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+const readResponseTimeout = 30 * time.Second
+
 // dialServiceInstance lookup dnssd service and make tcp connection
 func dialServiceInstance(ctx context.Context, e *dnssd.BrowseEntry, dialTimeout time.Duration) (net.Conn, error) {
 
@@ -124,6 +126,7 @@ type conn struct {
 	emu      sync.Mutex
 	onEvent  func(*http.Response) // EVENT callback, when characteristic value updated
 	response chan *http.Response  // assume that one request wants one response
+	resError chan error           // assume that one request wants one response
 }
 
 func newConn(c net.Conn) *conn {
@@ -132,6 +135,7 @@ func newConn(c net.Conn) *conn {
 		smu:      sync.Mutex{},
 		emu:      sync.Mutex{},
 		response: make(chan *http.Response),
+		resError: make(chan error),
 		closed:   false,
 	}
 
@@ -236,10 +240,17 @@ func (c *conn) loop() {
 
 			res, err := http.ReadResponse(rb, nil)
 			if err != nil {
+				c.close()
 				continue
 			}
 
+			timeout := time.AfterFunc(readResponseTimeout, func() {
+				c.close()
+			})
+
 			all, err := io.ReadAll(res.Body)
+			res.Body.Close()
+			timeout.Stop()
 			if err != nil {
 				continue
 			}
@@ -255,11 +266,22 @@ func (c *conn) loop() {
 		} else {
 			res, err := http.ReadResponse(rd, nil)
 			if err != nil {
+				c.resError <- err
+				c.close()
 				continue
 			}
+
+			timeout := time.AfterFunc(readResponseTimeout, func() {
+				c.close()
+			})
+
 			// ReadAll here because if response is chunked then on next loop there will be error
 			all, err := io.ReadAll(res.Body)
+			res.Body.Close()
+			timeout.Stop()
 			if err != nil {
+				c.resError <- err
+				c.close()
 				continue
 			}
 
