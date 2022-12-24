@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"github.com/hkontrol/hkontroller/chacha20poly1305"
 	"github.com/hkontrol/hkontroller/curve25519"
 	"github.com/hkontrol/hkontroller/ed25519"
@@ -205,10 +204,8 @@ func (d *Device) PairVerify() error {
 	d.cc.UpgradeEnc(ss)
 	d.verified = true
 
-	fmt.Println("d.startBackgroundRead")
 	d.startBackgroundRead()
 
-	fmt.Println("emit verified")
 	d.emit("verified")
 
 	return nil
