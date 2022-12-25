@@ -1,10 +1,5 @@
 package hkontroller
 
-import (
-	"sort"
-	"strings"
-)
-
 type Accessory struct {
 	Id uint64                `json:"aid"`
 	Ss []*ServiceDescription `json:"services"`
@@ -16,15 +11,9 @@ type Accessories struct {
 
 func (a *Accessory) GetService(serviceType HapServiceType) *ServiceDescription {
 
-	idx := sort.Search(len(a.Ss), func(i int) bool {
-		return strings.Compare(string(a.Ss[i].Type), string(serviceType)) >= 0
-	})
-
-	if idx > -1 && idx < len(a.Ss) {
-		if a.Ss[idx].Type == serviceType {
-			return a.Ss[idx]
-		} else {
-			return nil
+	for _, s := range a.Ss {
+		if s.Type.ToShort() == serviceType.ToShort() {
+			return s
 		}
 	}
 

@@ -1,5 +1,7 @@
 package hkontroller
 
+import "strings"
+
 type HapServiceType string
 
 const (
@@ -145,6 +147,19 @@ func (h HapServiceType) String() string {
 	}
 
 	return string(h)
+}
+
+func (h HapServiceType) ToShort() HapServiceType {
+	s := string(h)
+	a := strings.Split(s, "-")
+	s = a[0]
+	for i := 0; i < len(s); i += 1 {
+		if s[i] != '0' {
+			s = s[i:]
+			return HapServiceType(s)
+		}
+	}
+	return h
 }
 
 type HapCharacteristicType string
@@ -534,4 +549,17 @@ func (h HapCharacteristicType) String() string {
 		return "WaterLevel"
 	}
 	return string(h)
+}
+
+func (h HapCharacteristicType) ToShort() HapCharacteristicType {
+	s := string(h)
+	a := strings.Split(s, "-")
+	s = a[0]
+	for i := 0; i < len(s); i += 1 {
+		if s[i] != '0' {
+			s = s[i:]
+			return HapCharacteristicType(s)
+		}
+	}
+	return h
 }

@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -306,20 +304,13 @@ func (d *Device) GetAccessories() error {
 		return err
 	}
 
-	// now sort to prepare for binary search
-	sort.Slice(accs.Accs, func(i, j int) bool {
-		return accs.Accs[i].Id < accs.Accs[j].Id
-	})
+	// shorten UUIDs
 	for _, a := range accs.Accs {
-		// sort by service type
-		sort.Slice(a.Ss, func(i, j int) bool {
-			return strings.Compare(string(a.Ss[i].Type), string(a.Ss[j].Type)) < 0
-		})
 		for _, s := range a.Ss {
-			// sort by characteristic type
-			sort.Slice(s.Cs, func(i, j int) bool {
-				return strings.Compare(string(s.Cs[i].Type), string(s.Cs[j].Type)) < 0
-			})
+			s.Type = s.Type.ToShort()
+			for _, c := range s.Cs {
+				c.Type = c.Type.ToShort()
+			}
 		}
 	}
 
