@@ -4,15 +4,16 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
+	"strconv"
+	"time"
+
 	"github.com/hkontrol/hkontroller/chacha20poly1305"
 	"github.com/hkontrol/hkontroller/curve25519"
 	"github.com/hkontrol/hkontroller/ed25519"
 	"github.com/hkontrol/hkontroller/hkdf"
 	"github.com/hkontrol/hkontroller/log"
 	"github.com/hkontrol/hkontroller/tlv8"
-	"io"
-	"strconv"
-	"time"
 )
 
 type pairVerifyM1Payload struct {
@@ -277,10 +278,11 @@ func (d *Device) pairVerifyPersist(ctx context.Context, retryTimeout time.Durati
 			if d.paired && !d.verified {
 				err := d.PairVerify()
 				if err != nil {
-					//fmt.Println("pair verify err: ", err) // TODO m4err = 2 better error handling
-					// if there was failed PairVerify call - unpair device
-					// TODO: think about few retries?
-					d.Unpair()
+					// just emit error in this case
+					// sometimes error may occur if connection was broken, etc
+					// so no need to unpair
+					d.emit("error", err)
+					return
 				}
 			} else if d.paired && d.verified {
 				// to catch later
