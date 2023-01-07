@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/brutella/dnssd"
@@ -74,12 +75,7 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 	lostCh := make(chan *Device)
 
 	addFn := func(e dnssd.BrowseEntry) {
-
-		// CC:22:3D:E3:CE:65 example of id
-		id, ok := e.Text["id"]
-		if !ok {
-			return
-		}
+		id := strings.Join([]string{e.Name, e.Type, e.Domain}, ".")
 		c.mu.Lock()
 		c.mdnsDiscovered[id] = &e
 
@@ -112,9 +108,8 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 					c.st.DeletePairing(dd.Id)
 				}
 			}()
-		} else {
-			c.devices[id].setDnssdEntry(&e)
 		}
+		c.devices[id].mergeDnssdEntry(e)
 
 		dd.discovered = true
 		c.mu.Unlock()
@@ -123,10 +118,7 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 	}
 
 	rmvFn := func(e dnssd.BrowseEntry) {
-		id, ok := e.Text["id"]
-		if !ok {
-			return
-		}
+		id := strings.Join([]string{e.Name, e.Type, e.Domain}, ".")
 		c.mu.Lock()
 		delete(c.mdnsDiscovered, id)
 		dd, ok := c.devices[id]
@@ -138,13 +130,13 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 			dd.emit("lost")
 			dd.close()
 			lostCh <- dd
-		}
-		if !dd.IsPaired() {
-			// if not paired and not discovered, then it should not present anymore
-			c.mu.Lock()
-			delete(c.devices, dd.Id)
-			c.mu.Unlock()
-			dd.offAllTopics()
+			if !dd.IsPaired() {
+				// if not paired and not discovered, then it should not present anymore
+				c.mu.Lock()
+				delete(c.devices, dd.Id)
+				c.mu.Unlock()
+				dd.offAllTopics()
+			}
 		}
 	}
 
