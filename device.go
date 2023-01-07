@@ -23,8 +23,8 @@ const emitTimeout = 5 * time.Second
 type Device struct {
 	ee emitter.Emitter
 
-	Id           string
-	FriendlyName string
+	Id   string
+	Name string
 
 	dnssdBrowseEntry *dnssd.BrowseEntry
 
@@ -99,7 +99,7 @@ func newDevice(dnssdEntry *dnssd.BrowseEntry, id string,
 	}
 
 	if dnssdEntry != nil {
-		d.FriendlyName = dnssdEntry.Name
+		d.Name = dnssdEntry.Name
 	}
 
 	return d
@@ -108,7 +108,7 @@ func newDevice(dnssdEntry *dnssd.BrowseEntry, id string,
 func (d *Device) setDnssdEntry(e *dnssd.BrowseEntry) {
 	d.dnssdBrowseEntry = e
 	if e != nil {
-		d.FriendlyName = e.Name
+		d.Name = e.Name
 	}
 }
 

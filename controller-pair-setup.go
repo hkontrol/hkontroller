@@ -262,7 +262,7 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 		return errors.New("m6 sig not valid")
 	}
 
-	d.pairing.Name = accessoryId
+	d.pairing.Id = accessoryId
 	d.pairing.PublicKey = accessoryLTPK
 	//device.tcpAddr = devTcpAddr
 	return nil

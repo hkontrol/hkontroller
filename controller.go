@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/brutella/dnssd"
@@ -75,7 +74,8 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 	lostCh := make(chan *Device)
 
 	addFn := func(e dnssd.BrowseEntry) {
-		id := strings.Join([]string{e.Name, e.Type, e.Domain}, ".")
+		//id := strings.Join([]string{e.Name, e.Type, e.Domain}, ".")
+		id := e.Name
 		c.mu.Lock()
 		c.mdnsDiscovered[id] = &e
 
@@ -118,7 +118,8 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 	}
 
 	rmvFn := func(e dnssd.BrowseEntry) {
-		id := strings.Join([]string{e.Name, e.Type, e.Domain}, ".")
+		//id := strings.Join([]string{e.Name, e.Type, e.Domain}, ".")
+		id := e.Name
 		c.mu.Lock()
 		delete(c.mdnsDiscovered, id)
 		dd, ok := c.devices[id]
@@ -233,7 +234,8 @@ func (c *Controller) LoadPairings() error {
 	pp := c.st.Pairings()
 	for _, p := range pp {
 		id := p.Name
-		c.devices[id] = newDevice(nil, id, c.name, c.localLTKP, c.localLTSK)
+		c.devices[id] = newDevice(nil, p.Id, c.name, c.localLTKP, c.localLTSK)
+		c.devices[id].Name = id
 		c.devices[id].pairing = p
 		c.devices[id].paired = true
 
