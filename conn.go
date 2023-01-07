@@ -26,9 +26,17 @@ func dialServiceInstance(ctx context.Context, e *dnssd.BrowseEntry, dialTimeout 
 		return IPs[i].To4() != nil // ip4 first
 	})
 
-	var tcpAddr string
+	var firstEstablishedConn net.Conn
+	mu := sync.Mutex{}
+
+	// common context
+	cc, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	// probe every ip tcpAddr
+	wg := sync.WaitGroup{}
 	for _, ip := range IPs {
+		var tcpAddr string
 		if ip.To4() == nil {
 			// ipv6 tcpAddr in square brackets
 			// [fe80::...%wlp2s0]:51510
@@ -39,20 +47,35 @@ func dialServiceInstance(ctx context.Context, e *dnssd.BrowseEntry, dialTimeout 
 
 		log.Debug.Println("dialing: ", tcpAddr)
 
-		// use dialer with parent context to be able to cancel connect
-		d := net.Dialer{Timeout: dialTimeout}
-		tcpConn, err := d.DialContext(ctx, "tcp", tcpAddr)
-		if err != nil {
-			log.Debug.Println("dial err: ", err)
-			continue
-		}
-		log.Debug.Println("dial good")
-
-		// connection ok, return it
-		return tcpConn, nil
+		wg.Add(1)
+		go func(tcpAddr string) {
+			defer wg.Done()
+			// use dialer with parent context to be able to cancel connect
+			d := net.Dialer{Timeout: dialTimeout}
+			tcpConn, err := d.DialContext(cc, "tcp", tcpAddr)
+			if err != nil {
+				fmt.Println("dial err: ", err)
+				log.Debug.Println("dial err: ", err)
+				return
+			}
+			fmt.Println("dial good")
+			log.Debug.Println("dial good")
+			mu.Lock()
+			defer mu.Unlock()
+			if firstEstablishedConn == nil {
+				firstEstablishedConn = tcpConn
+				cancel() // cancel all other attempts
+			}
+		}(tcpAddr)
 	}
 
-	return nil, errors.New("no connection available")
+	wg.Wait()
+
+	if firstEstablishedConn == nil {
+		return nil, errors.New("no connection available")
+	} else {
+		return firstEstablishedConn, nil
+	}
 }
 
 const eventHeader = "EVENT"
