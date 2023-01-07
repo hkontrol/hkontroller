@@ -17,8 +17,8 @@ import (
 	"github.com/olebedev/emitter"
 )
 
-const dialTimeout = 1 * time.Second
-const emitTimeout = 1 * time.Second
+const dialTimeout = 5 * time.Second
+const emitTimeout = 5 * time.Second
 
 type Device struct {
 	ee emitter.Emitter
@@ -109,6 +109,16 @@ func (d *Device) setDnssdEntry(e *dnssd.BrowseEntry) {
 	d.dnssdBrowseEntry = e
 	if e != nil {
 		d.FriendlyName = e.Name
+	}
+}
+
+func (d *Device) mergeDnssdEntry(e dnssd.BrowseEntry) {
+	if d.dnssdBrowseEntry == nil {
+		d.dnssdBrowseEntry = &e
+		return
+	}
+	for _, ip := range e.IPs {
+		d.dnssdBrowseEntry.IPs = append(d.dnssdBrowseEntry.IPs, ip)
 	}
 }
 
