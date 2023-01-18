@@ -99,12 +99,12 @@ func main() {
 			if device == nil {
 				fmt.Println("device not found")
 			} else {
-				fmt.Println("selected device: ", device.Id, "\t", device.FriendlyName)
+				fmt.Println("selected device: ", device.Id, "\t", device.Name)
 			}
 		} else if strings.HasPrefix(text, "devices") {
 			fmt.Println("ID\tFriendlyName\tDNSSD\tPaired\tVerified")
 			for _, d := range c.GetAllDevices() {
-				str := d.Id + "\t" + d.FriendlyName
+				str := d.Id + "\t" + d.Name
 				if d.IsDiscovered() {
 					str += "\tdiscovered"
 				} else {

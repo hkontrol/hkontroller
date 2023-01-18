@@ -18,6 +18,7 @@ import (
 )
 
 const dialTimeout = 5 * time.Second
+const reqTimeout = 10 * time.Second
 const emitTimeout = 5 * time.Second
 
 type Device struct {
@@ -73,12 +74,14 @@ func (r *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 			return res, err
 		case err := <-r.d.cc.resError:
 			return nil, err
+		case <-req.Context().Done():
+			return nil, req.Context().Err()
 		}
 		//return res, nil
 	}
 
 	rd := bufio.NewReader(r.d.cc)
-	res, err := http.ReadResponse(rd, nil)
+	res, err := http.ReadResponse(rd, req)
 	if err != nil {
 		return nil, err
 	}
@@ -299,10 +302,18 @@ func (d *Device) GetAccessories() error {
 		return errors.New("paired device not verified or not connected")
 	}
 
-	res, err := d.doGet("/accessories")
+	ctx, cancel := context.WithTimeout(context.Background(), reqTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", "/accessories", nil)
 	if err != nil {
 		return err
 	}
+	res, err := d.doRequest(req)
+	if err != nil {
+		return nil
+	}
+
 	all, err := io.ReadAll(res.Body)
 	if err != nil {
 		return err
@@ -332,7 +343,17 @@ func (d *Device) GetAccessories() error {
 // GetCharacteristic sends GET /characteristic request and return characteristic description and value.
 func (d *Device) GetCharacteristic(aid uint64, cid uint64) (CharacteristicDescription, error) {
 	ep := fmt.Sprintf("/characteristics?id=%d.%d", aid, cid)
-	res, err := d.doGet(ep)
+
+	ctx, cancel := context.WithTimeout(context.Background(), reqTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", ep, nil)
+
+	if err != nil {
+		return CharacteristicDescription{}, err
+	}
+
+	res, err := d.doRequest(req)
 	if err != nil {
 		return CharacteristicDescription{}, err
 	}
@@ -374,7 +395,10 @@ func (d *Device) PutCharacteristic(aid uint64, cid uint64, val interface{}) erro
 		return err
 	}
 
-	req, err := http.NewRequest("PUT", "/characteristics", bytes.NewReader(b))
+	ctx, cancel := context.WithTimeout(context.Background(), reqTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", "/characteristics", bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
