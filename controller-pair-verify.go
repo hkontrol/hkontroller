@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
-	"strconv"
 	"time"
 
 	"github.com/hkontrol/hkontroller/chacha20poly1305"
@@ -33,7 +33,7 @@ type pairVerifyM3EncPayload struct {
 // PairVerify
 func (d *Device) PairVerify() error {
 	if !d.paired {
-		return errors.New("device not paired")
+		return errors.New("not paired before verifying")
 	}
 	if d.cc == nil {
 		err := d.connect()
@@ -57,33 +57,33 @@ func (d *Device) PairVerify() error {
 	}
 	b, err := tlv8.Marshal(m1)
 	if err != nil {
-		return err
+		return &PairVerifyError{"M1", err}
 	}
 
 	// send req
 	response, err := d.doPost("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
-		return err
+		return &PairVerifyError{"M1", err}
 	}
 	res := response.Body
 	defer res.Close()
 	all, err := io.ReadAll(res)
 	if err != nil {
-		return err
+		return &PairVerifyError{"M2", err}
 	}
 	m2 := pairSetupPayload{}
 	err = tlv8.Unmarshal(all, &m2)
 	if err != nil {
-		return err
+		return &PairVerifyError{"M2", err}
 	}
 	if m2.State != M2 {
-		return errors.New("expected state M2")
+		return &PairVerifyError{"M2", fmt.Errorf("unexpected state %x, expected: %x", m2.State, M2)}
 	}
 	if m2.PublicKey == nil || m2.EncryptedData == nil || m2.Error != 0x00 {
-		return errors.New("m2err = " + strconv.FormatInt(int64(m2.Error), 10))
+		return &PairVerifyError{"M2", TlvErrorFromCode(m2.Error)}
 	}
 	if len(m2.PublicKey) != 32 {
-		return errors.New("wrong remote localPublic key length")
+		return &PairVerifyError{"M2", errors.New("wrong remote localPublic key length")}
 	}
 	remotePubk := [32]byte{}
 	copy(remotePubk[:], m2.PublicKey)
@@ -96,7 +96,7 @@ func (d *Device) PairVerify() error {
 		[]byte("Pair-Verify-Encrypt-Info"),
 	)
 	if err != nil {
-		return nil
+		return &PairVerifyError{"M2", err}
 	}
 
 	data := m2.EncryptedData
@@ -112,15 +112,15 @@ func (d *Device) PairVerify() error {
 		nil,
 	)
 	if err != nil {
-		return err
+		return &PairVerifyError{"M2", err}
 	}
 	m2dec := pairSetupPayload{}
 	err = tlv8.UnmarshalReader(bytes.NewReader(decryptedBytes), &m2dec)
 	if err != nil {
-		return err
+		return &PairVerifyError{"M2", err}
 	}
 	if m2dec.Signature == nil {
-		return errors.New("no signature from accessory")
+		return &PairVerifyError{"M2", errors.New("no signature from accessory")}
 	}
 	// m2.Signature
 	// Validate signature
@@ -133,7 +133,7 @@ func (d *Device) PairVerify() error {
 
 	sigValid := ed25519.ValidateSignature(ltpk, material, m2dec.Signature)
 	if !sigValid {
-		return errors.New("signature invalid")
+		return &PairVerifyError{"M2", errors.New("signature invalid")}
 	}
 
 	// ----- M3 ------
@@ -145,7 +145,7 @@ func (d *Device) PairVerify() error {
 
 	signature, err := ed25519.Signature(d.controllerLTSK, material)
 	if err != nil {
-		return err
+		return &PairVerifyError{"M3", err}
 	}
 
 	m3raw := pairVerifyM3RawPayload{
@@ -154,7 +154,7 @@ func (d *Device) PairVerify() error {
 	}
 	m3bytes, err := tlv8.Marshal(m3raw)
 	if err != nil {
-		return err
+		return &PairVerifyError{"M3", err}
 	}
 
 	encryptedBytes, mac, err := chacha20poly1305.EncryptAndSeal(
@@ -164,7 +164,7 @@ func (d *Device) PairVerify() error {
 		nil,
 	)
 	if err != nil {
-		return err
+		return &PairVerifyError{"M3", err}
 	}
 
 	m5enc := pairVerifyM3EncPayload{
@@ -173,33 +173,33 @@ func (d *Device) PairVerify() error {
 	}
 	b, err = tlv8.Marshal(m5enc)
 	if err != nil {
-		return err
+		return &PairVerifyError{"M3", err}
 	}
 
 	response, err = d.doPost("/pair-verify", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
-		return err
+		return &PairVerifyError{"M4", err}
 	}
 	res = response.Body
 
 	defer res.Close()
 	all, err = io.ReadAll(res)
 	if err != nil {
-		return err
+		return &PairVerifyError{"M4", err}
 	}
 	m4 := pairSetupPayload{}
 	err = tlv8.Unmarshal(all, &m4)
 	if err != nil {
-		return err
+		return &PairVerifyError{"M4", err}
 	}
 
 	if m4.Error != 0x00 {
-		return errors.New("m4err = " + strconv.FormatInt(int64(m4.Error), 10))
+		return &PairVerifyError{"M4", TlvErrorFromCode(m4.Error)}
 	}
 
 	ss, err := newControllerSession(sharedKey, d)
 	if err != nil {
-		return err
+		return &PairVerifyError{"M4", err}
 	}
 	d.ss = ss
 	d.cc.UpgradeEnc(ss)
@@ -261,19 +261,13 @@ func (d *Device) pairVerifyPersist(ctx context.Context, retryTimeout time.Durati
 		d.OffClose(closedEv)
 		d.OffUnpaired(unpairedEv)
 		d.OffLost(lostEv)
+		d.close()
 	}()
 	for {
 		go func() {
 			if !d.discovered || d.dnssdBrowseEntry == nil {
 				//d.emit("lost")
 				return
-			}
-			if d.cc == nil {
-				err := d.connect()
-				if err != nil {
-					//fmt.Println("connect err: ", err)
-					// ok, should be error event in channel
-				}
 			}
 			if d.paired && !d.verified {
 				err := d.PairVerify()
@@ -292,8 +286,21 @@ func (d *Device) pairVerifyPersist(ctx context.Context, retryTimeout time.Durati
 
 		// catch events
 		select {
-		case <-errorEv:
+		case ev := <-errorEv:
 			log.Debug.Println("error event")
+			if len(ev.Args) > 0 {
+				// check error - if it's protocol error, e.g. invalid signature, then return err
+				if err, ok := ev.Args[0].(error); ok {
+					var pSetupErr *PairSetupError
+					var pVerifyErr *PairVerifyError
+					if errors.As(err, &pSetupErr) {
+						return err
+					}
+					if errors.As(err, &pVerifyErr) {
+						return err
+					}
+				}
+			}
 			time.Sleep(retryTimeout)
 			// reconnect
 			continue
@@ -308,9 +315,6 @@ func (d *Device) pairVerifyPersist(ctx context.Context, retryTimeout time.Durati
 				log.Debug.Println("lost event")
 				return errors.New("lost")
 			}
-		//case <-lostEv:
-		//	fmt.Println("lost event")
-		//	return errors.New("lost")
 		case <-unpairedEv:
 			d.cancelPersistConnection = nil
 			log.Debug.Println("unpaired event")

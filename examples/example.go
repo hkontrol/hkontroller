@@ -43,7 +43,7 @@ func main() {
 
 	go func() {
 		for d := range discoverCh {
-			fmt.Println("discovered: ", d.Id)
+			fmt.Println("discovered: ", strings.Replace(d.Id, " ", "__", -1))
 			if d.IsPaired() {
 				fmt.Println("already paired, establishing connection")
 				go verify(d)
@@ -53,7 +53,7 @@ func main() {
 	}()
 	go func() {
 		for d := range lostCh {
-			writeln("lost: ", d.Id)
+			writeln("lost: ", strings.Replace(d.Id, " ", "__", -1))
 		}
 	}()
 
@@ -95,7 +95,9 @@ func main() {
 				fmt.Println("use <device>")
 				continue
 			}
-			device = c.GetDevice(args[1])
+			id := args[1]
+			id = strings.Replace(id, "__", " ", -1)
+			device = c.GetDevice(id)
 			if device == nil {
 				fmt.Println("device not found")
 			} else {
@@ -104,7 +106,7 @@ func main() {
 		} else if strings.HasPrefix(text, "devices") {
 			fmt.Println("ID\tFriendlyName\tDNSSD\tPaired\tVerified")
 			for _, d := range c.GetAllDevices() {
-				str := d.Id + "\t" + d.Name
+				str := strings.Replace(d.Id, " ", "__", -1) + "\t" + d.Name
 				if d.IsDiscovered() {
 					str += "\tdiscovered"
 				} else {
@@ -300,7 +302,7 @@ func main() {
 				continue
 			}
 			go func(d *hkontroller.Device) {
-				did := d.Id
+				did := strings.Replace(d.Id, " ", "__", -1)
 				for v := range watcher {
 					fmt.Println("EVENT from ", did,
 						" aid=", v.Args[0], ", iid=", v.Args[1], ", value=", v.Args[2])

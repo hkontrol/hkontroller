@@ -10,7 +10,6 @@ import (
 	"github.com/hkontrol/hkontroller/tlv8"
 	"io"
 	"net/http"
-	"strconv"
 )
 
 type pairSetupM1Payload struct {
@@ -41,7 +40,7 @@ func (d *Device) pairSetupM1(pin string) (*pairSetupClientSession, error) {
 	}
 	b, err := tlv8.Marshal(m1)
 	if err != nil {
-		return nil, err
+		return nil, &PairSetupError{"M1", err}
 	}
 
 	resp, err := d.doPost("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
@@ -49,18 +48,18 @@ func (d *Device) pairSetupM1(pin string) (*pairSetupClientSession, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("invalid status code %v", resp.StatusCode)
+		return nil, &PairSetupError{"M1", fmt.Errorf("invalid status code %v", resp.StatusCode)}
 	}
 	res := resp.Body
 	defer res.Close()
 	all, err := io.ReadAll(res)
 	if err != nil {
-		return nil, err
+		return nil, &PairSetupError{"M1", err}
 	}
 	m2 := pairSetupPayload{}
 	err = tlv8.Unmarshal(all, &m2)
 	if err != nil {
-		return nil, err
+		return nil, &PairSetupError{"M1", err}
 	}
 
 	salt := m2.Salt
@@ -70,15 +69,15 @@ func (d *Device) pairSetupM1(pin string) (*pairSetupClientSession, error) {
 	state := m2.State
 	m2err := m2.Error
 	if state != M2 {
-		return nil, errors.New("expected state M2")
+		return nil, &PairSetupError{"M2", fmt.Errorf("unexpected state %x, expected: %x", state, M2)}
 	}
 	if salt == nil && remotePubk == nil && m2err != 0x00 {
-		return nil, errors.New("m2err = " + strconv.FormatInt(int64(m2err), 10))
+		return nil, &PairSetupError{"M2", TlvErrorFromCode(m2err)}
 	}
 
 	clientSession, err := newPairSetupClientSession(salt, remotePubk, pin)
 	if err != nil {
-		return nil, err
+		return nil, &PairSetupError{"M2", err}
 	}
 
 	return clientSession, nil
@@ -94,40 +93,40 @@ func (d *Device) pairSetupM3(clientSession *pairSetupClientSession) error {
 	}
 	b, err := tlv8.Marshal(m3)
 	if err != nil {
-		return err
+		return &PairSetupError{"M3", err}
 	}
 
 	resp, err := d.doPost("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
-		return err
+		return &PairSetupError{"M3", err}
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("invalid status code %v", resp.StatusCode)
+		return &PairSetupError{"M3", fmt.Errorf("invalid status code %v", resp.StatusCode)}
 	}
 	res := resp.Body
 	defer res.Close()
 	all, err := io.ReadAll(res)
 	if err != nil {
-		return err
+		return &PairSetupError{"M3", err}
 	}
 	m4 := pairSetupPayload{}
 	err = tlv8.Unmarshal(all, &m4)
 	if err != nil {
-		return err
+		return &PairSetupError{"M3", err}
 	}
 
 	state := m4.State
 	if state != M4 {
-		return errors.New("expected state M4")
+		return &PairSetupError{"M4", fmt.Errorf("unexpected state %x, expected: %x", state, M4)}
 	}
 	serverProof := m4.Proof
 	m4err := m4.Error
 	if serverProof == nil && m4err != 0x00 {
-		return errors.New("m4err = " + strconv.FormatInt(int64(m4err), 10))
+		return &PairSetupError{"M4", TlvErrorFromCode(m4err)}
 	}
 	serverProofValid := clientSession.session.VerifyServerAuthenticator(serverProof)
 	if !serverProofValid {
-		return errors.New("server proof is not valid")
+		return &PairSetupError{"M4", errors.New("server proof is not valid")}
 	}
 
 	return nil
@@ -140,7 +139,7 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 		[]byte("Pair-Setup-Encrypt-Info"),
 	)
 	if err != nil {
-		return err
+		return &PairSetupError{"M5", err}
 	}
 
 	hash, err := hkdf.Sha512(
@@ -149,7 +148,7 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 		[]byte("Pair-Setup-Controller-Sign-Info"),
 	)
 	if err != nil {
-		return err
+		return &PairSetupError{"M5", err}
 	}
 
 	var material []byte
@@ -159,7 +158,7 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 
 	signature, err := ed25519.Signature(d.controllerLTSK, material)
 	if err != nil {
-		return err
+		return &PairSetupError{"M5", err}
 	}
 
 	m5raw := pairSetupM5RawPayload{
@@ -169,7 +168,7 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 	}
 	b, err := tlv8.Marshal(m5raw)
 	if err != nil {
-		return err
+		return &PairSetupError{"M5", err}
 	}
 
 	encryptedBytes, tag, err := chacha20poly1305.EncryptAndSeal(
@@ -179,7 +178,7 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 		nil,
 	)
 	if err != nil {
-		return err
+		return &PairSetupError{"M5", err}
 	}
 
 	encData := append(encryptedBytes, tag[:]...)
@@ -190,28 +189,28 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 	}
 	b, err = tlv8.Marshal(m5enc)
 	if err != nil {
-		return err
+		return &PairSetupError{"M5", err}
 	}
 	resp, err := d.doPost("/pair-setup", HTTPContentTypePairingTLV8, bytes.NewReader(b))
 	if err != nil {
-		return err
+		return &PairSetupError{"M5", err}
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("invalid status code %v", resp.StatusCode)
+		return &PairSetupError{"M6", fmt.Errorf("invalid status code %v", resp.StatusCode)}
 	}
 	res := resp.Body
 	defer res.Close()
 	all, err := io.ReadAll(res)
 	if err != nil {
-		return err
+		return &PairSetupError{"M6", err}
 	}
 	m6enc := pairSetupPayload{}
 	err = tlv8.Unmarshal(all, &m6enc)
 	if err != nil {
-		return err
+		return &PairSetupError{"M6", err}
 	}
 	if m6enc.EncryptedData == nil && m6enc.Error != 0x00 {
-		return errors.New("m6err = " + strconv.FormatInt(int64(m6enc.Error), 10))
+		return &PairSetupError{"M6", TlvErrorFromCode(m6enc.Error)}
 	}
 
 	message := m6enc.EncryptedData[:(len(m6enc.EncryptedData) - 16)]
@@ -229,7 +228,7 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 	m6dec := pairSetupPayload{}
 	err = tlv8.UnmarshalReader(bytes.NewReader(decrypted), &m6dec)
 	if err != nil {
-		return err
+		return &PairSetupError{"M6", err}
 	}
 
 	//log.Println("m6dec.State = ", m6dec.State) somehow it's state is 0
@@ -237,7 +236,7 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 	//	return errors.New("expected state M6")
 	//}
 	if m6dec.PublicKey == nil && m6dec.Error != 0x00 {
-		return errors.New("m6err = " + strconv.FormatInt(int64(m6dec.Error), 10))
+		return &PairSetupError{"M6", TlvErrorFromCode(m6dec.Error)}
 	}
 
 	accessoryId := m6dec.Identifier
@@ -250,7 +249,7 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 		[]byte("Pair-Setup-Accessory-Sign-Info"),
 	)
 	if err != nil {
-		return err
+		return &PairSetupError{"M6", err}
 	}
 
 	accessoryInfo := hash[:]
@@ -259,7 +258,7 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 
 	valid := ed25519.ValidateSignature(accessoryLTPK, accessoryInfo, accessorySignature)
 	if !valid {
-		return errors.New("m6 sig not valid")
+		return &PairSetupError{"M6", errors.New("m6 signature is not valid")}
 	}
 
 	d.pairing.Id = accessoryId

@@ -58,7 +58,6 @@ func dialServiceInstance(ctx context.Context, e *dnssd.BrowseEntry, dialTimeout 
 				log.Debug.Println("dial err: ", err)
 				return
 			}
-			fmt.Println("dial good")
 			log.Debug.Println("dial good")
 			mu.Lock()
 			defer mu.Unlock()
