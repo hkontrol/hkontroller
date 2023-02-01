@@ -2,7 +2,6 @@ package hkontroller
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -33,7 +32,6 @@ type Controller struct {
 	uuid              string
 	mu                sync.Mutex
 	cancelDiscovering context.CancelFunc
-	mdnsDiscovered    map[string]*dnssd.BrowseEntry
 	devices           map[string]*Device
 
 	st *storer
@@ -58,14 +56,65 @@ func NewController(store Store, name string) (*Controller, error) {
 	}
 
 	return &Controller{
-		name:           name,
-		mu:             sync.Mutex{},
-		mdnsDiscovered: make(map[string]*dnssd.BrowseEntry),
-		devices:        make(map[string]*Device),
-		st:             &st,
-		localLTKP:      keypair.Public,
-		localLTSK:      keypair.Private,
+		name:      name,
+		mu:        sync.Mutex{},
+		devices:   make(map[string]*Device),
+		st:        &st,
+		localLTKP: keypair.Public,
+		localLTSK: keypair.Private,
 	}, nil
+}
+
+func (c *Controller) putDevice(dd *Device) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.devices[dd.Name] = dd
+
+	devPairedCh := dd.OnPaired()
+	go func() {
+		for range devPairedCh {
+			c.st.SavePairing(dd.pairing)
+		}
+	}()
+
+	devUnpairedCh := dd.OnUnpaired()
+	go func() {
+		for range devUnpairedCh {
+			c.mu.Lock()
+			dd.close(errors.New("device unpaired"))
+			// if not paired and not discovered,
+			// then it should not present anymore
+			if !dd.IsDiscovered() {
+				delete(c.devices, dd.Id)
+				dd.offAllTopics()
+			}
+			c.mu.Unlock()
+			c.st.DeletePairing(dd.Id)
+		}
+	}()
+	devLostCh := dd.OnLost()
+	go func() {
+		for range devLostCh {
+			if !dd.IsPaired() {
+				// if lost and not paired,
+				// then it should not present anymore
+				c.mu.Lock()
+				delete(c.devices, dd.Id)
+				c.mu.Unlock()
+				dd.offAllTopics()
+			}
+		}
+	}()
+}
+
+func (c *Controller) getDevice(id string) *Device {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	dd, ok := c.devices[id]
+	if !ok {
+		return nil
+	}
+	return dd
 }
 
 func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
@@ -74,70 +123,32 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 	lostCh := make(chan *Device)
 
 	addFn := func(e dnssd.BrowseEntry) {
-		//id := strings.Join([]string{e.Name, e.Type, e.Domain}, ".")
 		id := e.Name
-		c.mu.Lock()
-		c.mdnsDiscovered[id] = &e
 
-		dd, ok := c.devices[id]
-		if !ok {
+		dd := c.getDevice(e.Name)
+		if dd == nil {
 			// not exist - init one
-			c.devices[id] = newDevice(&e, id, c.name, c.localLTKP, c.localLTSK)
-			pairing := Pairing{Name: id}
-			c.devices[id].pairing = pairing
-			dd = c.devices[id]
-			devPairedCh := dd.OnPaired()
-			go func() {
-				for range devPairedCh {
-					c.st.SavePairing(dd.pairing)
-				}
-			}()
-
-			devUnpairedCh := dd.OnUnpaired()
-			go func() {
-				for range devUnpairedCh {
-					// if not paired and not discovered, then it should not present anymore
-					// TODO: create separate method
-					c.mu.Lock()
-					dd.close()
-					if !dd.IsDiscovered() {
-						delete(c.devices, dd.Id)
-						dd.offAllTopics()
-					}
-					c.mu.Unlock()
-					c.st.DeletePairing(dd.Id)
-				}
-			}()
+			dd = newDevice(&e, id, c.name, c.localLTKP, c.localLTSK)
+			dd.pairing = Pairing{Name: id}
+			c.putDevice(dd)
 		}
 		c.devices[id].mergeDnssdEntry(e)
 
 		dd.discovered = true
-		c.mu.Unlock()
-		// end section tcp conn
 		discoverCh <- dd
 	}
 
 	rmvFn := func(e dnssd.BrowseEntry) {
 		//id := strings.Join([]string{e.Name, e.Type, e.Domain}, ".")
 		id := e.Name
-		c.mu.Lock()
-		delete(c.mdnsDiscovered, id)
-		dd, ok := c.devices[id]
-		c.mu.Unlock()
+		dd := c.getDevice(id)
 
-		if ok {
+		if dd != nil {
 			dd.discovered = false
 			dd.setDnssdEntry(nil)
 			dd.emit("lost")
-			dd.close()
+			dd.close(errors.New("device lost from mdns"))
 			lostCh <- dd
-			if !dd.IsPaired() {
-				// if not paired and not discovered, then it should not present anymore
-				c.mu.Lock()
-				delete(c.devices, dd.Id)
-				c.mu.Unlock()
-				dd.offAllTopics()
-			}
 		}
 	}
 
@@ -159,27 +170,6 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 		}
 	}()
 	return discoverCh, lostCh
-}
-
-func (c *Controller) SavePairings(s Store) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for k, v := range c.devices {
-		key := fmt.Sprintf("pairing_%s", k)
-
-		val, err := json.Marshal(v)
-		if err != nil {
-			return err
-		}
-
-		err = s.Set(key, val)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // GetAllDevices returns list of all devices loaded or discovered by controller.
@@ -228,52 +218,20 @@ func (c *Controller) GetVerifiedDevices() []*Device {
 
 func (c *Controller) LoadPairings() error {
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	pp := c.st.Pairings()
 	for _, p := range pp {
 		id := p.Name
-		c.devices[id] = newDevice(nil, p.Id, c.name, c.localLTKP, c.localLTSK)
-		c.devices[id].Name = id
-		c.devices[id].pairing = p
-		c.devices[id].paired = true
+		dd := newDevice(nil, p.Id, c.name, c.localLTKP, c.localLTSK)
+		dd.Name = id
+		dd.pairing = p
+		dd.paired = true
 
-		dd := c.devices[id]
-
-		devPairedCh := dd.OnPaired()
-		go func() {
-			for range devPairedCh {
-				c.st.SavePairing(dd.pairing)
-			}
-		}()
-
-		devUnpairedCh := dd.OnUnpaired()
-		go func() {
-			for range devUnpairedCh {
-				// if not paired and not discovered, then it should not present anymore
-				c.mu.Lock()
-				dd.close()
-				if !dd.IsDiscovered() {
-					delete(c.devices, dd.Id)
-					dd.offAllTopics()
-				}
-				c.mu.Unlock()
-				c.st.DeletePairing(dd.Id)
-			}
-		}()
+		c.putDevice(dd)
 	}
 
 	return nil
 }
 
 func (c *Controller) GetDevice(deviceId string) *Device {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	a, ok := c.devices[deviceId]
-	if !ok {
-		return nil
-	}
-	return a
+	return c.getDevice(deviceId)
 }

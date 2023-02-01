@@ -21,6 +21,8 @@ func main() {
 		panic(err)
 	}
 
+	devices := []*hkontroller.Device{}
+
 	// load from store
 	_ = c.LoadPairings()
 
@@ -43,7 +45,8 @@ func main() {
 
 	go func() {
 		for d := range discoverCh {
-			fmt.Println("discovered: ", strings.Replace(d.Id, " ", "__", -1))
+			devices = append(devices, d)
+			fmt.Println("discovered: ", d.Id)
 			if d.IsPaired() {
 				fmt.Println("already paired, establishing connection")
 				go verify(d)
@@ -53,7 +56,12 @@ func main() {
 	}()
 	go func() {
 		for d := range lostCh {
-			writeln("lost: ", strings.Replace(d.Id, " ", "__", -1))
+			writeln("lost: ", d.Id)
+			for i := range devices {
+				if devices[i].Id == d.Id {
+					devices[i] = nil
+				}
+			}
 		}
 	}()
 
@@ -92,21 +100,29 @@ func main() {
 				continue
 			}
 			if len(args) != 2 {
-				fmt.Println("use <device>")
+				fmt.Println("use <device no>")
 				continue
 			}
-			id := args[1]
-			id = strings.Replace(id, "__", " ", -1)
-			device = c.GetDevice(id)
-			if device == nil {
-				fmt.Println("device not found")
-			} else {
-				fmt.Println("selected device: ", device.Id, "\t", device.Name)
+			i, err := strconv.ParseInt(args[1], 10, 64)
+			if err != nil {
+				fmt.Println("error parsing num: ", err)
+			}
+			if i >= 0 && i < int64(len(devices)) {
+				device = devices[i]
+				if device == nil {
+					fmt.Println("device not found")
+				} else {
+					fmt.Println("selected device: ", device.Id, "\t", device.Name)
+				}
 			}
 		} else if strings.HasPrefix(text, "devices") {
-			fmt.Println("ID\tFriendlyName\tDNSSD\tPaired\tVerified")
-			for _, d := range c.GetAllDevices() {
-				str := strings.Replace(d.Id, " ", "__", -1) + "\t" + d.Name
+			fmt.Println("#No\tID\tFriendlyName\tDNSSD\tPaired\tVerifying\tVerified")
+			for i, d := range devices {
+				if d == nil {
+					continue
+				}
+				str := strconv.FormatInt(int64(i), 10) + "\t"
+				str += d.Id + "\t" + d.Name
 				if d.IsDiscovered() {
 					str += "\tdiscovered"
 				} else {
@@ -114,6 +130,11 @@ func main() {
 				}
 				if d.IsPaired() {
 					str += "\tpaired"
+				} else {
+					str += "\t---"
+				}
+				if d.IsVerifying() {
+					str += "\tverifying"
 				} else {
 					str += "\t---"
 				}
@@ -302,7 +323,7 @@ func main() {
 				continue
 			}
 			go func(d *hkontroller.Device) {
-				did := strings.Replace(d.Id, " ", "__", -1)
+				did := d.Id
 				for v := range watcher {
 					fmt.Println("EVENT from ", did,
 						" aid=", v.Args[0], ", iid=", v.Args[1], ", value=", v.Args[2])

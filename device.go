@@ -35,11 +35,16 @@ type Device struct {
 
 	pairing Pairing
 
-	discovered bool // discovered via mdns?
-	paired     bool // completed /pair-setup?
-	verified   bool // is connection established after /pair-verify?
+	discovered bool // discovered mdns?
 
-	cancelPersistConnection context.CancelFunc
+	nowPairing   bool // pairing in progress?
+	paired       bool // completed /pair-setup?
+	nowVerifying bool // /pair-verify in progress?
+	verified     bool // is connection established after /pair-verify?
+
+	closeReason error
+
+	CancelPersistConnection context.CancelFunc
 
 	cc    *conn
 	ss    *session
@@ -210,11 +215,15 @@ func (d *Device) OffUnpaired(ch <-chan emitter.Event) {
 	d.ee.Off("unpaired", ch)
 }
 
-func (d *Device) close() error {
+func (d *Device) close(reason error) error {
+	fmt.Printf("device <%s> close call with reason: %v\n", d.Id, reason)
+	d.closeReason = reason
 	var err error
 	if d.cc != nil {
 		d.cc.close()
 	}
+	d.nowPairing = false
+	d.nowVerifying = false
 	d.verified = false
 	d.httpc = nil
 
@@ -227,10 +236,10 @@ func (d *Device) close() error {
 }
 
 func (d *Device) Close() error {
-	if d.cancelPersistConnection != nil {
-		d.cancelPersistConnection()
+	if d.CancelPersistConnection != nil {
+		d.CancelPersistConnection()
 	}
-	return d.close()
+	return d.close(errors.New("manual close "))
 }
 
 func (d *Device) connect() error {
@@ -238,6 +247,8 @@ func (d *Device) connect() error {
 	if d.cc != nil {
 		d.cc.Conn.Close()
 	}
+	d.nowPairing = false
+	d.nowVerifying = false
 	d.verified = false
 
 	if d.dnssdBrowseEntry == nil || !d.discovered {
@@ -259,6 +270,8 @@ func (d *Device) connect() error {
 	}
 	d.cc.SetEventCallback(d.onEvent)
 
+	d.closeReason = nil
+
 	d.emit("connect")
 
 	return nil
@@ -268,7 +281,7 @@ func (d *Device) startBackgroundRead() {
 	d.cc.inBackground = true
 	go func() {
 		d.cc.loop()
-		d.close()
+		d.close(errors.New("stop background read"))
 	}()
 }
 
@@ -277,15 +290,30 @@ func (d *Device) IsDiscovered() bool {
 	return d.discovered
 }
 
+// IsPairing returns true if /pair-setup step is running currently
+func (d *Device) IsPairing() bool {
+	return d.nowPairing
+}
+
 // IsPaired returns true if device is paired by this controller.
 // If another client is paired with device it will return false.
 func (d *Device) IsPaired() bool {
 	return d.paired
 }
 
+// IsVerifying returns true if /pair-verify step is running currently
+func (d *Device) IsVerifying() bool {
+	return d.nowVerifying
+}
+
 // IsVerified returns true if /pair-verify step was completed by this controller.
 func (d *Device) IsVerified() bool {
 	return d.verified
+}
+
+// CloseReason returns last close reason if connection is closed
+func (d *Device) CloseReason() error {
+	return d.closeReason
 }
 
 // Accessories return list of previously discovered accessories.

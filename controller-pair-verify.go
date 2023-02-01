@@ -32,16 +32,12 @@ type pairVerifyM3EncPayload struct {
 
 // PairVerify
 func (d *Device) PairVerify() error {
+	d.nowVerifying = true
+	defer func() { d.nowVerifying = false }()
 	if !d.paired {
-		return errors.New("not paired before verifying")
+		return errors.New("pair device before verifying")
 	}
-	if d.cc == nil {
-		err := d.connect()
-		if err != nil {
-			return err
-		}
-	}
-	if d.cc.closed {
+	if d.cc == nil || d.cc.closed {
 		err := d.connect()
 		if err != nil {
 			return err
@@ -215,15 +211,18 @@ func (d *Device) PairVerify() error {
 // PairSetupAndVerify first setup pairing if was not set before
 // then establish encrypted connection
 // that should automatically reconnect in case of failure.
+// If pin argument is empty pair-setup step is skipped.
 func (d *Device) PairSetupAndVerify(ctx context.Context, pin string, retryTimeout time.Duration) error {
 	var err error
 
-	// pair-setup should be done in any case
-	if !d.paired {
-		err = d.PairSetup(pin)
-	}
-	if err != nil {
-		return err
+	if pin != "" {
+		// pair-setup should be done in any case
+		if !d.paired {
+			err = d.PairSetup(pin)
+		}
+		if err != nil {
+			return err
+		}
 	}
 
 	// then encrypted channel should be persisted
@@ -249,9 +248,9 @@ func (d *Device) PairSetupAndVerify(ctx context.Context, pin string, retryTimeou
 
 // pairVerifyPersist establish encrypted connection with auto-reconnect.
 // Connection broke if device is unpaired. May be cancelled by context as well.
-func (d *Device) pairVerifyPersist(ctx context.Context, retryTimeout time.Duration) error {
+func (d *Device) pairVerifyPersist(ctx context.Context, retryTimeout time.Duration) {
 	newCtx, cancel := context.WithCancel(ctx)
-	d.cancelPersistConnection = cancel
+	d.CancelPersistConnection = cancel
 	errorEv := d.OnError()
 	unpairedEv := d.OnUnpaired()
 	closedEv := d.OnClose()
@@ -261,7 +260,6 @@ func (d *Device) pairVerifyPersist(ctx context.Context, retryTimeout time.Durati
 		d.OffClose(closedEv)
 		d.OffUnpaired(unpairedEv)
 		d.OffLost(lostEv)
-		d.close()
 	}()
 	for {
 		go func() {
@@ -293,37 +291,39 @@ func (d *Device) pairVerifyPersist(ctx context.Context, retryTimeout time.Durati
 				if err, ok := ev.Args[0].(error); ok {
 					var pSetupErr *PairSetupError
 					var pVerifyErr *PairVerifyError
-					if errors.As(err, &pSetupErr) {
-						return err
-					}
-					if errors.As(err, &pVerifyErr) {
-						return err
+					if errors.As(err, &pSetupErr) || errors.As(err, &pVerifyErr) {
+						d.close(err)
+						return
 					}
 				}
 			}
 			time.Sleep(retryTimeout)
-			// reconnect
+			// reconnect in new iteration
+			d.nowVerifying = true
 			continue
 		case <-closedEv:
 			log.Debug.Println("close event")
 			select {
 			case <-time.After(retryTimeout):
-				// connection was closed, back to reconnect loop
+				// connection was closed, try to reconnect
+				d.nowVerifying = true
 				continue
 			case <-lostEv:
 				// connection was closed and device is not advertising itself no more
 				log.Debug.Println("lost event")
-				return errors.New("lost")
+				d.close(errors.New("lost event"))
+				return
 			}
 		case <-unpairedEv:
-			d.cancelPersistConnection = nil
+			d.CancelPersistConnection = nil
 			log.Debug.Println("unpaired event")
 			// in this case we don't need connection anymore
-			return errors.New("unpaired")
+			d.close(errors.New("unpaired event"))
+			return
 		case <-newCtx.Done():
-			d.cancelPersistConnection = nil
-			d.close()
-			return errors.New("cancelled")
+			d.CancelPersistConnection = nil
+			d.close(newCtx.Err())
+			return
 		}
 	}
 }

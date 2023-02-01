@@ -263,25 +263,20 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 
 	d.pairing.Id = accessoryId
 	d.pairing.PublicKey = accessoryLTPK
-	//device.tcpAddr = devTcpAddr
+
 	return nil
 }
 
 func (d *Device) PairSetup(pin string) error {
+	d.nowPairing = true
+	defer func() { d.nowPairing = false }()
 
-	if d.cc == nil {
+	if d.cc == nil || d.cc.closed {
 		err := d.connect()
 		if err != nil {
 			return err
 		}
 	}
-	if d.cc.closed {
-		err := d.connect()
-		if err != nil {
-			return err
-		}
-	}
-	// tcp conn open
 
 	clientSession, err := d.pairSetupM1(pin)
 	if err != nil {
