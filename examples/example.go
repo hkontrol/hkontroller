@@ -31,7 +31,7 @@ func main() {
 		fmt.Print("> ")
 	}
 
-	discoverCh, lostCh := c.StartDiscovering()
+	discoverCh, lostCh := c.StartDiscovery()
 
 	verify := func(d *hkontroller.Device) {
 		ctx := context.Background()

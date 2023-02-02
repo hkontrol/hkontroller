@@ -28,11 +28,11 @@ type pairSetupPayload struct {
 }
 
 type Controller struct {
-	name              string
-	uuid              string
-	mu                sync.Mutex
-	cancelDiscovering context.CancelFunc
-	devices           map[string]*Device
+	name            string
+	uuid            string
+	mu              sync.Mutex
+	cancelDiscovery context.CancelFunc
+	devices         map[string]*Device
 
 	st *storer
 
@@ -117,7 +117,7 @@ func (c *Controller) getDevice(id string) *Device {
 	return dd
 }
 
-func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
+func (c *Controller) StartDiscoveryWithContext(ctx context.Context) (<-chan *Device, <-chan *Device) {
 
 	discoverCh := make(chan *Device)
 	lostCh := make(chan *Device)
@@ -158,10 +158,10 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 			close(lostCh)
 		}()
 		for {
-			ctx, cancel := context.WithCancel(context.Background())
+			newCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
-			c.cancelDiscovering = cancel
-			if err := dnssd.LookupType(ctx, "_hap._tcp.local.", addFn, rmvFn); err != nil {
+			c.cancelDiscovery = cancel
+			if err := dnssd.LookupType(newCtx, "_hap._tcp.local.", addFn, rmvFn); err != nil {
 				if errors.Is(err, context.Canceled) {
 					return
 				}
@@ -170,6 +170,16 @@ func (c *Controller) StartDiscovering() (<-chan *Device, <-chan *Device) {
 		}
 	}()
 	return discoverCh, lostCh
+}
+
+func (c *Controller) StartDiscovery() (<-chan *Device, <-chan *Device) {
+	return c.StartDiscoveryWithContext(context.Background())
+}
+
+func (c *Controller) StopDiscovery() {
+	if c.cancelDiscovery != nil {
+		c.cancelDiscovery()
+	}
 }
 
 // GetAllDevices returns list of all devices loaded or discovered by controller.
