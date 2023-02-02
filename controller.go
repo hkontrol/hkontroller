@@ -129,7 +129,7 @@ func (c *Controller) StartDiscoveryWithContext(ctx context.Context) (<-chan *Dev
 		if dd == nil {
 			// not exist - init one
 			dd = newDevice(&e, id, c.name, c.localLTKP, c.localLTSK)
-			dd.pairing = Pairing{Name: id}
+			dd.pairing = Pairing{Id: id}
 			c.putDevice(dd)
 		}
 		c.devices[id].mergeDnssdEntry(e)
@@ -230,8 +230,8 @@ func (c *Controller) LoadPairings() error {
 
 	pp := c.st.Pairings()
 	for _, p := range pp {
-		id := p.Name
-		dd := newDevice(nil, p.Id, c.name, c.localLTKP, c.localLTSK)
+		id := p.Id
+		dd := newDevice(nil, id, c.name, c.localLTKP, c.localLTSK)
 		dd.Name = id
 		dd.pairing = p
 		dd.paired = true

@@ -135,7 +135,7 @@ func (st *storer) SavePairing(pairing Pairing) error {
 		return err
 	}
 
-	return st.Set(keyForPairingName(pairing.Name), b)
+	return st.Set(keyForPairingName(pairing.Id), b)
 }
 
 // DeletePairing deletes the pairing with a given name.

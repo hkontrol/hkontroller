@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/hkontrol/hkontroller/tlv8"
 	"io"
 	"net/http"
 	"strconv"
+
+	"github.com/hkontrol/hkontroller/tlv8"
 )
 
 type pairAddReqPayload struct {
@@ -29,7 +30,7 @@ func (d *Device) PairAdd(p Pairing) error {
 	pl := pairAddReqPayload{
 		State:       M1,
 		Method:      MethodAddPairing,
-		Identifier:  p.Name,
+		Identifier:  p.Id,
 		PublicKey:   p.PublicKey,
 		Permissions: p.Permission,
 	}

@@ -5,9 +5,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/hkontrol/hkontroller/tlv8"
 	"io"
 	"net/http"
+
+	"github.com/hkontrol/hkontroller/tlv8"
 )
 
 type pairListReqPayload struct {
@@ -98,7 +99,7 @@ func (d *Device) ListPairings() ([]Pairing, error) {
 			return nil, err
 		}
 		if tag == 1 {
-			pp.Name = string(val)
+			pp.Id = string(val)
 		} else if tag == 3 {
 			pp.PublicKey = val
 		} else if tag == 11 {
