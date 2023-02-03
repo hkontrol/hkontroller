@@ -130,6 +130,13 @@ func (d *Device) mergeDnssdEntry(e dnssd.BrowseEntry) {
 	}
 }
 
+func (d *Device) GetDnssdEntry() dnssd.BrowseEntry {
+	if d.dnssdBrowseEntry != nil {
+		return *d.dnssdBrowseEntry
+	}
+	return dnssd.BrowseEntry{}
+}
+
 func (d *Device) doRequest(req *http.Request) (*http.Response, error) {
 	if d.httpc == nil || d.cc.closed {
 		return nil, errors.New("no http client available")
