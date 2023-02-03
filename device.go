@@ -301,6 +301,10 @@ func (d *Device) IsPaired() bool {
 	return d.paired
 }
 
+func (d *Device) GetPairingInfo() Pairing {
+	return d.pairing
+}
+
 // IsVerifying returns true if /pair-verify step is running currently
 func (d *Device) IsVerifying() bool {
 	return d.nowVerifying
