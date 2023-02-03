@@ -46,7 +46,7 @@ func main() {
 	go func() {
 		for d := range discoverCh {
 			devices = append(devices, d)
-			fmt.Println("discovered: ", d.Id)
+			fmt.Println("discovered: ", d.Name)
 			if d.IsPaired() {
 				fmt.Println("already paired, establishing connection")
 				go verify(d)
@@ -56,9 +56,9 @@ func main() {
 	}()
 	go func() {
 		for d := range lostCh {
-			writeln("lost: ", d.Id)
+			writeln("lost: ", d.Name)
 			for i := range devices {
-				if devices[i].Id == d.Id {
+				if devices[i].Name == d.Name {
 					devices[i] = nil
 				}
 			}
@@ -71,7 +71,7 @@ func main() {
 		if device == nil {
 			fmt.Print("> ")
 		} else {
-			fmt.Print(device.Id, "> ")
+			fmt.Print(device.Name, "> ")
 		}
 		text, _ := reader.ReadString('\n')
 		text = strings.Replace(text, "\n", "", -1)
@@ -112,7 +112,7 @@ func main() {
 				if device == nil {
 					fmt.Println("device not found")
 				} else {
-					fmt.Println("selected device: ", device.Id, "\t", device.Name)
+					fmt.Println("selected device: ", device.Name, "\t", device.Name)
 				}
 			}
 		} else if strings.HasPrefix(text, "devices") {
@@ -122,7 +122,7 @@ func main() {
 					continue
 				}
 				str := strconv.FormatInt(int64(i), 10) + "\t"
-				str += d.Id + "\t" + d.Name
+				str += d.Name + "\t" + d.Name
 				if d.IsDiscovered() {
 					str += "\tdiscovered"
 				} else {
@@ -323,14 +323,14 @@ func main() {
 				continue
 			}
 			go func(d *hkontroller.Device) {
-				did := d.Id
+				did := d.Name
 				for v := range watcher {
 					fmt.Println("EVENT from ", did,
 						" aid=", v.Args[0], ", iid=", v.Args[1], ", value=", v.Args[2])
 					if device == nil {
 						fmt.Print("> ")
 					} else {
-						fmt.Print(device.Id, "> ")
+						fmt.Print(device.Name, "> ")
 					}
 				}
 			}(device)

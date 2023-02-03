@@ -24,7 +24,6 @@ const emitTimeout = 5 * time.Second
 type Device struct {
 	ee emitter.Emitter
 
-	Id   string
 	Name string
 
 	dnssdBrowseEntry *dnssd.BrowseEntry
@@ -94,12 +93,12 @@ func (r *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	return res, nil
 }
 
-func newDevice(dnssdEntry *dnssd.BrowseEntry, id string,
+func newDevice(dnssdEntry *dnssd.BrowseEntry, name string,
 	controllerId string, controllerLTPK []byte, controllerLTSK []byte) *Device {
 
 	d := &Device{
 		dnssdBrowseEntry: dnssdEntry,
-		Id:               id,
+		Name:             name,
 		controllerId:     controllerId,
 		controllerLTPK:   controllerLTPK,
 		controllerLTSK:   controllerLTSK,
@@ -223,7 +222,7 @@ func (d *Device) OffUnpaired(ch <-chan emitter.Event) {
 }
 
 func (d *Device) close(reason error) error {
-	fmt.Printf("device <%s> close call with reason: %v\n", d.Id, reason)
+	fmt.Printf("device <%s> close call with reason: %v\n", d.Name, reason)
 	d.closeReason = reason
 	var err error
 	if d.cc != nil {

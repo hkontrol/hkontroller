@@ -261,6 +261,7 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 		return &PairSetupError{"M6", errors.New("m6 signature is not valid")}
 	}
 
+	d.pairing.Name = d.Name
 	d.pairing.Id = accessoryId
 	d.pairing.PublicKey = accessoryLTPK
 

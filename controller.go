@@ -73,6 +73,7 @@ func (c *Controller) putDevice(dd *Device) {
 	devPairedCh := dd.OnPaired()
 	go func() {
 		for range devPairedCh {
+			fmt.Println("save pairing: ", dd.pairing)
 			c.st.SavePairing(dd.pairing)
 		}
 	}()
@@ -85,11 +86,11 @@ func (c *Controller) putDevice(dd *Device) {
 			// if not paired and not discovered,
 			// then it should not present anymore
 			if !dd.IsDiscovered() {
-				delete(c.devices, dd.Id)
+				delete(c.devices, dd.Name)
 				dd.offAllTopics()
 			}
 			c.mu.Unlock()
-			c.st.DeletePairing(dd.Id)
+			c.st.DeletePairing(dd.Name)
 		}
 	}()
 	devLostCh := dd.OnLost()
@@ -99,7 +100,7 @@ func (c *Controller) putDevice(dd *Device) {
 				// if lost and not paired,
 				// then it should not present anymore
 				c.mu.Lock()
-				delete(c.devices, dd.Id)
+				delete(c.devices, dd.Name)
 				c.mu.Unlock()
 				dd.offAllTopics()
 			}
@@ -123,16 +124,15 @@ func (c *Controller) StartDiscoveryWithContext(ctx context.Context) (<-chan *Dev
 	lostCh := make(chan *Device)
 
 	addFn := func(e dnssd.BrowseEntry) {
-		id := e.Name
+		name := e.Name
 
 		dd := c.getDevice(e.Name)
 		if dd == nil {
 			// not exist - init one
-			dd = newDevice(&e, id, c.name, c.localLTKP, c.localLTSK)
-			dd.pairing = Pairing{Id: id}
+			dd = newDevice(&e, name, c.name, c.localLTKP, c.localLTSK)
 			c.putDevice(dd)
 		}
-		c.devices[id].mergeDnssdEntry(e)
+		c.devices[name].mergeDnssdEntry(e)
 
 		dd.discovered = true
 		discoverCh <- dd
@@ -230,9 +230,8 @@ func (c *Controller) LoadPairings() error {
 
 	pp := c.st.Pairings()
 	for _, p := range pp {
-		id := p.Id
-		dd := newDevice(nil, id, c.name, c.localLTKP, c.localLTSK)
-		dd.Name = id
+		name := p.Name
+		dd := newDevice(nil, name, c.name, c.localLTKP, c.localLTSK)
 		dd.pairing = p
 		dd.paired = true
 
@@ -242,6 +241,6 @@ func (c *Controller) LoadPairings() error {
 	return nil
 }
 
-func (c *Controller) GetDevice(deviceId string) *Device {
-	return c.getDevice(deviceId)
+func (c *Controller) GetDevice(deviceName string) *Device {
+	return c.getDevice(deviceName)
 }

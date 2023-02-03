@@ -59,7 +59,6 @@ func newControllerSession(shared [32]byte, d *Device) (*session, error) {
 
 	s := &session{
 		Device: Device{
-			Id:         d.Id,
 			pairing:    d.pairing,
 			discovered: d.discovered,
 			paired:     d.paired,
