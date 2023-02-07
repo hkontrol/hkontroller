@@ -19,7 +19,7 @@ import (
 
 const dialTimeout = 5 * time.Second
 const reqTimeout = 10 * time.Second
-const emitTimeout = 5 * time.Second
+const emitTimeout = 30 * time.Second
 
 type Device struct {
 	ee emitter.Emitter
@@ -156,6 +156,16 @@ func (d *Device) doGet(url string) (*http.Response, error) {
 }
 
 func (d *Device) emit(topic string, args ...interface{}) {
+	// maybe that will help =)
+	topics := d.ee.Topics()
+	found := false
+	for _, t := range topics {
+		found = found || t == topic
+	}
+	if !found {
+		return
+	}
+
 	done := d.ee.Emit(topic, args...)
 	select {
 	case <-done:
