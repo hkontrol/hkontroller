@@ -480,16 +480,52 @@ func (d *Device) onEvent(res *http.Response) {
 		iid := ch.Iid
 		val := ch.Value
 
+		// update values, so it will be available without extra GetAccessories request
+		for _, aa := range d.Accessories() {
+			if aa.Id != aid {
+				continue
+			}
+			for _, ss := range aa.Ss {
+				for _, cc := range ss.Cs {
+					if cc.Iid == iid {
+						cc.Value = val
+					}
+				}
+			}
+		}
+
 		topic := fmt.Sprintf("event %d %d", aid, iid)
 		d.emit(topic, aid, iid, val)
 	}
 }
 
+func (d *Device) getEventPutPayloadForAccessory(aid int, subscribe bool) []CharacteristicPut {
+	var cs []CharacteristicPut
+	for _, aa := range d.Accessories() {
+		if int(aa.Id) != aid && aid > -1 { // if aid < 0 we get list for all accs
+			continue
+		}
+		for _, ss := range aa.Ss {
+			for _, cc := range ss.Cs {
+				for _, pp := range cc.Permissions {
+					if pp == "ev" { // supported
+						ev := subscribe
+						cs = append(cs, CharacteristicPut{Aid: aa.Id, Iid: cc.Iid, Events: &ev})
+					}
+				}
+			}
+		}
+	}
+	return cs
+}
+
 func (d *Device) SubscribeToEvents(aid uint64, iid uint64) (<-chan emitter.Event, error) {
 	topic := fmt.Sprintf("event %d %d", aid, iid)
+	super := fmt.Sprintf("event %d *", aid)
+	mega := fmt.Sprintf("event * *")
 
 	for _, tt := range d.ee.Topics() {
-		if tt == topic {
+		if tt == topic || tt == super || tt == mega {
 			// already subscribed
 			// support multiple listeners
 			return d.ee.On(topic), nil
@@ -522,6 +558,166 @@ func (d *Device) SubscribeToEvents(aid uint64, iid uint64) (<-chan emitter.Event
 	}
 
 	return d.ee.On(topic), nil
+}
+
+func (d *Device) SubscribeToAccessoryEvents(aid uint64) (<-chan emitter.Event, error) {
+
+	topic := fmt.Sprintf("event %d *", aid)
+	super := fmt.Sprintf("event * *")
+
+	for _, tt := range d.ee.Topics() {
+		if tt == topic || tt == super {
+			// already subscribed
+			// support multiple listeners
+			return d.ee.On(topic), nil
+		}
+	}
+
+	type putPayload struct {
+		Cs []CharacteristicPut `json:"characteristics"`
+	}
+	pl := putPayload{Cs: d.getEventPutPayloadForAccessory(int(aid), true)}
+
+	b, err := json.Marshal(pl)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", "/characteristics", bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := d.doRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if res.StatusCode != http.StatusNoContent {
+		return nil, errors.New("not 204")
+	}
+
+	return d.ee.On(topic), nil
+}
+
+func (d *Device) SubscribeToAllEvents() (<-chan emitter.Event, error) {
+
+	topic := fmt.Sprintf("event * *")
+
+	for _, tt := range d.ee.Topics() {
+		if tt == topic {
+			// already subscribed
+			// support multiple listeners
+			return d.ee.On(topic), nil
+		}
+	}
+
+	type putPayload struct {
+		Cs []CharacteristicPut `json:"characteristics"`
+	}
+
+	pl := putPayload{Cs: d.getEventPutPayloadForAccessory(-1, true)}
+
+	b, err := json.Marshal(pl)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", "/characteristics", bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := d.doRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if res.StatusCode != http.StatusNoContent {
+		return nil, errors.New("not 204")
+	}
+
+	return d.ee.On(topic), nil
+}
+
+func (d *Device) UnsubscribeFromAllEvents(channels ...<-chan emitter.Event) error {
+
+	topic := fmt.Sprintf("event * *")
+
+	if len(channels) != 0 && len(channels) < len(d.ee.Listeners(topic)) {
+		// somebody else subscribed
+		d.ee.Off(topic, channels...)
+		return nil
+	}
+
+	type putPayload struct {
+		Cs []CharacteristicPut `json:"characteristics"`
+	}
+
+	pl := putPayload{Cs: d.getEventPutPayloadForAccessory(-1, false)}
+
+	b, err := json.Marshal(pl)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("PUT", "/characteristics", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	_, err = d.doRequest(req)
+	if err != nil {
+		return err
+	}
+
+	// close all related channels
+	for _, pp := range pl.Cs {
+		topic := fmt.Sprintf("event %d %d", pp.Aid, pp.Iid)
+		d.ee.Off(topic)
+	}
+
+	return nil
+}
+
+func (d *Device) UnsubscribeFromAccessoryEvents(aid uint64, channels ...<-chan emitter.Event) error {
+
+	topic := fmt.Sprintf("event %d *", aid)
+
+	if len(channels) != 0 && len(channels) < len(d.ee.Listeners(topic)) {
+		// somebody else subscribed
+		d.ee.Off(topic, channels...)
+		return nil
+	}
+
+	type putPayload struct {
+		Cs []CharacteristicPut `json:"characteristics"`
+	}
+
+	pl := putPayload{Cs: d.getEventPutPayloadForAccessory(-1, false)}
+
+	b, err := json.Marshal(pl)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("PUT", "/characteristics", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	_, err = d.doRequest(req)
+	if err != nil {
+		return err
+	}
+
+	// close all related channels
+	for _, pp := range pl.Cs {
+		topic := fmt.Sprintf("event %d %d", pp.Aid, pp.Iid)
+		d.ee.Off(topic)
+	}
+
+	return nil
 }
 
 func (d *Device) UnsubscribeFromEvents(aid uint64, iid uint64, channels ...<-chan emitter.Event) error {
