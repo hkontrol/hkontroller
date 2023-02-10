@@ -78,11 +78,11 @@ func dialServiceInstance(ctx context.Context, e *dnssd.BrowseEntry, dialTimeout 
 }
 
 const eventHeader = "EVENT"
+const httpHeader = "HTTP"
 
 // to transform EVENT into valid HTTP response
 type eventTransformer struct {
 	rr io.Reader
-	cc *conn
 
 	skipped     bool // indicates that rr.ReadWithTransform("EVENT") was performed
 	transformed bool // indicates that EVENT proto was replaced with HTTP
@@ -92,8 +92,10 @@ type eventTransformer struct {
 func newEventTransformer(cc *conn, r io.Reader) *eventTransformer {
 
 	return &eventTransformer{
-		rr: r,
-		cc: cc,
+		rr:          r,
+		readIndex:   0,
+		skipped:     false,
+		transformed: false,
 	}
 }
 
@@ -114,17 +116,17 @@ func (t *eventTransformer) Read(p []byte) (n int, err error) {
 		t.skipped = true
 	}
 
-	if !t.transformed {
-		d := []byte("HTTP")
+	for !t.transformed {
+		d := []byte(httpHeader)
 		n = copy(p, d[t.readIndex:])
 		t.readIndex += n
 		if t.readIndex >= len(d) {
 			t.transformed = true
-			return n, nil
 		}
 	}
 
-	return t.rr.Read(p)
+	nn, err := t.rr.Read(p[t.readIndex:])
+	return t.readIndex + nn, err
 }
 
 type conn struct {
@@ -248,13 +250,12 @@ func (c *conn) Read(b []byte) (int, error) {
 
 func (c *conn) loop() {
 
-	rd := bufio.NewReader(c)
-
 	for !c.closed {
+		rd := bufio.NewReader(c)
 		b, err := rd.Peek(len(eventHeader)) // len of EVENT string
 		if err != nil {
+			fmt.Println("error reading from connection: ", err)
 			c.close()
-			break
 		}
 		if string(b) == eventHeader {
 			rt := newEventTransformer(c, rd)

@@ -3,45 +3,13 @@ package hkontroller
 import (
 	"github.com/hkontrol/hkontroller/chacha20poly1305"
 	"github.com/hkontrol/hkontroller/hkdf"
+	"sync/atomic"
 
 	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
-	"net/http"
-	"sync"
 )
-
-var mux = &sync.Mutex{}
-var cons = make(map[string]*conn)
-
-func setConn(addr string, conn *conn) {
-	mux.Lock()
-	defer mux.Unlock()
-	cons[addr] = conn
-}
-
-func getConn(req *http.Request) *conn {
-	mux.Lock()
-	defer mux.Unlock()
-
-	if con, ok := cons[req.RemoteAddr]; !ok {
-		return nil
-	} else {
-		return con
-	}
-}
-
-func conns() map[string]*conn {
-	copy := map[string]*conn{}
-	mux.Lock()
-	for k, v := range cons {
-		copy[k] = v
-	}
-	mux.Unlock()
-
-	return copy
-}
 
 type session struct {
 	Device Device
@@ -67,13 +35,16 @@ func newControllerSession(shared [32]byte, d *Device) (*session, error) {
 	}
 	var err error
 	s.encryptKey, err = hkdf.Sha512(shared[:], salt, out)
-	s.encryptCount = 0
+	atomic.StoreUint64(&s.encryptCount, 0)
 	if err != nil {
 		return nil, err
 	}
 
 	s.decryptKey, err = hkdf.Sha512(shared[:], salt, in)
-	s.decryptCount = 0
+	atomic.StoreUint64(&s.decryptCount, 0)
+	if err != nil {
+		return nil, err
+	}
 
 	return s, err
 }
@@ -85,8 +56,7 @@ func (s *session) Encrypt(r io.Reader) (io.Reader, error) {
 	var buf bytes.Buffer
 	for _, p := range packets {
 		var nonce [8]byte
-		binary.LittleEndian.PutUint64(nonce[:], s.encryptCount)
-		s.encryptCount++
+		binary.LittleEndian.PutUint64(nonce[:], atomic.LoadUint64(&s.encryptCount))
 
 		bLength := make([]byte, 2)
 		binary.LittleEndian.PutUint16(bLength, uint16(p.length))
@@ -99,6 +69,8 @@ func (s *session) Encrypt(r io.Reader) (io.Reader, error) {
 		buf.Write(bLength[:])
 		buf.Write(encrypted)
 		buf.Write(mac[:])
+
+		atomic.AddUint64(&s.encryptCount, 1)
 	}
 
 	return &buf, nil
@@ -127,8 +99,7 @@ func (s *session) Decrypt(r io.Reader) (io.Reader, error) {
 		}
 
 		var nonce [8]byte
-		binary.LittleEndian.PutUint64(nonce[:], s.decryptCount)
-		s.decryptCount++
+		binary.LittleEndian.PutUint64(nonce[:], atomic.LoadUint64(&s.decryptCount))
 
 		lengthBytes := make([]byte, 2)
 		binary.LittleEndian.PutUint16(lengthBytes, length)
@@ -136,10 +107,13 @@ func (s *session) Decrypt(r io.Reader) (io.Reader, error) {
 		decrypted, err := chacha20poly1305.DecryptAndVerify(s.decryptKey[:], nonce[:], b, mac, lengthBytes)
 
 		if err != nil {
-			return nil, fmt.Errorf("Data encryption failed %s", err)
+			// TODO: examine. sometimes it doesn't decrypt data when EVENT/1.0 present
+			// 		  but if we apply decryption with counter+1 it works
+			return nil, fmt.Errorf("data encryption failed: %w", err)
 		}
-
 		buf.Write(decrypted)
+
+		atomic.AddUint64(&s.decryptCount, 1)
 
 		// Finish when all bytes fit in b
 		if length < packetLengthMax {
