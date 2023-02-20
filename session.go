@@ -1,21 +1,20 @@
 package hkontroller
 
 import (
-	"github.com/hkontrol/hkontroller/chacha20poly1305"
-	"github.com/hkontrol/hkontroller/hkdf"
-	"sync/atomic"
-
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/hkontrol/hkontroller/chacha20poly1305"
+	"github.com/hkontrol/hkontroller/hkdf"
 	"io"
 )
 
 type session struct {
 	Device Device
 
-	encryptKey   [32]byte
-	decryptKey   [32]byte
+	encryptKey [32]byte
+	decryptKey [32]byte
+
 	encryptCount uint64
 	decryptCount uint64
 }
@@ -35,13 +34,13 @@ func newControllerSession(shared [32]byte, d *Device) (*session, error) {
 	}
 	var err error
 	s.encryptKey, err = hkdf.Sha512(shared[:], salt, out)
-	atomic.StoreUint64(&s.encryptCount, 0)
+	s.encryptCount = 0
 	if err != nil {
 		return nil, err
 	}
 
 	s.decryptKey, err = hkdf.Sha512(shared[:], salt, in)
-	atomic.StoreUint64(&s.decryptCount, 0)
+	s.decryptCount = 0
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +55,7 @@ func (s *session) Encrypt(r io.Reader) (io.Reader, error) {
 	var buf bytes.Buffer
 	for _, p := range packets {
 		var nonce [8]byte
-		binary.LittleEndian.PutUint64(nonce[:], atomic.LoadUint64(&s.encryptCount))
+		binary.LittleEndian.PutUint64(nonce[:], s.encryptCount)
 
 		bLength := make([]byte, 2)
 		binary.LittleEndian.PutUint16(bLength, uint16(p.length))
@@ -70,7 +69,7 @@ func (s *session) Encrypt(r io.Reader) (io.Reader, error) {
 		buf.Write(encrypted)
 		buf.Write(mac[:])
 
-		atomic.AddUint64(&s.encryptCount, 1)
+		s.encryptCount += 1
 	}
 
 	return &buf, nil
@@ -99,7 +98,7 @@ func (s *session) Decrypt(r io.Reader) (io.Reader, error) {
 		}
 
 		var nonce [8]byte
-		binary.LittleEndian.PutUint64(nonce[:], atomic.LoadUint64(&s.decryptCount))
+		binary.LittleEndian.PutUint64(nonce[:], s.decryptCount)
 
 		lengthBytes := make([]byte, 2)
 		binary.LittleEndian.PutUint16(lengthBytes, length)
@@ -113,7 +112,7 @@ func (s *session) Decrypt(r io.Reader) (io.Reader, error) {
 		}
 		buf.Write(decrypted)
 
-		atomic.AddUint64(&s.decryptCount, 1)
+		s.decryptCount += 1
 
 		// Finish when all bytes fit in b
 		if length < packetLengthMax {
