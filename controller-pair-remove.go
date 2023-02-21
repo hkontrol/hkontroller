@@ -63,14 +63,11 @@ func (d *Device) PairRemove(controllerId string) error {
 
 func (d *Device) Unpair() error {
 	log.Debug.Println("d.Unpair()")
-	defer func() {
 
-		d.pairing = Pairing{}
-		d.paired = false
-		d.verified = false
+	d.pairing = Pairing{}
+	d.paired = false
+	d.verified = false
+	d.emit("unpaired")
 
-		log.Debug.Println("defer Unpair: emit unpaired")
-		d.emit("unpaired")
-	}()
 	return d.PairRemove(d.controllerId)
 }
