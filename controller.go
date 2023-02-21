@@ -81,6 +81,7 @@ func (c *Controller) putDevice(dd *Device) {
 	devUnpairedCh := dd.OnUnpaired()
 	go func() {
 		for range devUnpairedCh {
+			c.st.DeletePairing(dd.pairing.Id)
 			c.mu.Lock()
 			dd.close(errors.New("device unpaired"))
 			// if not paired and not discovered,
@@ -90,7 +91,6 @@ func (c *Controller) putDevice(dd *Device) {
 				dd.offAllTopics()
 			}
 			c.mu.Unlock()
-			c.st.DeletePairing(dd.Name)
 		}
 	}()
 	devLostCh := dd.OnLost()
