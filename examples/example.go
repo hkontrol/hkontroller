@@ -133,11 +133,6 @@ func main() {
 				} else {
 					str += "\t---"
 				}
-				if d.IsVerifying() {
-					str += "\tverifying"
-				} else {
-					str += "\t---"
-				}
 				if d.IsVerified() {
 					str += "\tverified"
 				} else {

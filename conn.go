@@ -16,8 +16,6 @@ import (
 	"time"
 )
 
-const readResponseTimeout = 30 * time.Second
-
 // dialServiceInstance lookup dnssd service and make tcp connection
 func dialServiceInstance(ctx context.Context, e *dnssd.BrowseEntry, dialTimeout time.Duration) (net.Conn, error) {
 
@@ -54,7 +52,6 @@ func dialServiceInstance(ctx context.Context, e *dnssd.BrowseEntry, dialTimeout 
 			d := net.Dialer{Timeout: dialTimeout}
 			tcpConn, err := d.DialContext(cc, "tcp", tcpAddr)
 			if err != nil {
-				fmt.Println("dial err: ", err)
 				log.Debug.Println("dial err: ", err)
 				return
 			}
@@ -143,21 +140,23 @@ type conn struct {
 	smu sync.Mutex
 	ss  *session
 
-	readBuf io.Reader
+	readBuf   io.Reader
+	bufReader *bufio.Reader
 
 	inBackground bool
 
-	emu      sync.Mutex
-	onEvent  func(*http.Response) // EVENT callback, when characteristic value updated
-	response chan *http.Response  // assume that one request wants one response
-	resError chan error           // assume that one request wants one response
+	onEvent func(*http.Response) // EVENT callback, when characteristic value updated
+
+	// indicates if response channel is open. it may be closed if request context was done
+	wantResponse bool
+	response     chan *http.Response // assume that one request wants one response
+	resError     chan error
 }
 
 func newConn(c net.Conn) *conn {
 	cc := &conn{
 		Conn:     c,
 		smu:      sync.Mutex{},
-		emu:      sync.Mutex{},
 		response: make(chan *http.Response),
 		resError: make(chan error),
 		closed:   false,
@@ -224,15 +223,13 @@ func (c *conn) Read(b []byte) (int, error) {
 		return n, err
 	}
 
+	if c.bufReader == nil {
+		c.bufReader = bufio.NewReader(c.Conn)
+	}
 	if c.readBuf == nil {
-		r := bufio.NewReader(c.Conn)
-		buf, err := c.ss.Decrypt(r)
+		buf, err := c.ss.Decrypt(c.bufReader)
 		if err != nil {
-			if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
-				// Ignore timeout error #77
-			} else { // if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
-				c.close()
-			}
+			c.close()
 			return 0, err
 		}
 
@@ -249,14 +246,16 @@ func (c *conn) Read(b []byte) (int, error) {
 }
 
 func (c *conn) loop() {
-
+	c.inBackground = true
+	rd := bufio.NewReader(c)
 	for !c.closed {
-		rd := bufio.NewReader(c)
 		b, err := rd.Peek(len(eventHeader)) // len of EVENT string
 		if err != nil {
-			fmt.Println("error reading from connection: ", err)
+			log.Debug.Println("error reading from connection: ", err)
 			c.close()
 		}
+		//fmt.Println("---")
+		//fmt.Println("rd.Peek: ", string(b))
 		if string(b) == eventHeader {
 			rt := newEventTransformer(c, rd)
 			rb := bufio.NewReader(rt)
@@ -267,13 +266,8 @@ func (c *conn) loop() {
 				continue
 			}
 
-			timeout := time.AfterFunc(readResponseTimeout, func() {
-				c.close()
-			})
-
 			all, err := io.ReadAll(res.Body)
 			res.Body.Close()
-			timeout.Stop()
 			if err != nil {
 				continue
 			}
@@ -289,29 +283,37 @@ func (c *conn) loop() {
 		} else {
 			res, err := http.ReadResponse(rd, nil)
 			if err != nil {
-				c.resError <- err
+				log.Debug.Println("response error: ", err)
 				c.close()
+				if c.wantResponse {
+					c.resError <- err
+				}
 				continue
 			}
-
-			timeout := time.AfterFunc(readResponseTimeout, func() {
-				c.close()
-			})
+			//dump, err := httputil.DumpResponse(res, false)
+			//fmt.Println(string(dump), err)
 
 			// ReadAll here because if response is chunked then on next loop there will be error
+			//fmt.Println("reading HTTP response body")
+
 			all, err := io.ReadAll(res.Body)
+			//fmt.Println("reading HTTP response body done. err: ", err)
 			res.Body.Close()
-			timeout.Stop()
 			if err != nil {
-				c.resError <- err
+				log.Debug.Println("response body read error: ", err)
 				c.close()
+				if c.wantResponse {
+					c.resError <- err
+				}
 				continue
 			}
 
 			// then assign new res.Body
 			res.Body = io.NopCloser(bytes.NewReader(all))
 
-			c.response <- res
+			if c.wantResponse {
+				c.response <- res
+			}
 		}
 	}
 }

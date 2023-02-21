@@ -32,8 +32,6 @@ type pairVerifyM3EncPayload struct {
 
 // PairVerify
 func (d *Device) PairVerify() error {
-	d.nowVerifying = true
-	defer func() { d.nowVerifying = false }()
 	if !d.paired {
 		return errors.New("pair device before verifying")
 	}
@@ -299,14 +297,12 @@ func (d *Device) pairVerifyPersist(ctx context.Context, retryTimeout time.Durati
 			}
 			time.Sleep(retryTimeout)
 			// reconnect in new iteration
-			d.nowVerifying = true
 			continue
 		case <-closedEv:
 			log.Debug.Println("close event")
 			select {
 			case <-time.After(retryTimeout):
 				// connection was closed, try to reconnect
-				d.nowVerifying = true
 				continue
 			case <-lostEv:
 				// connection was closed and device is not advertising itself no more

@@ -7,6 +7,7 @@ import (
 	"github.com/hkontrol/hkontroller/chacha20poly1305"
 	"github.com/hkontrol/hkontroller/hkdf"
 	"io"
+	"sync"
 )
 
 type session struct {
@@ -17,6 +18,7 @@ type session struct {
 
 	encryptCount uint64
 	decryptCount uint64
+	dmu          sync.Mutex
 }
 
 func newControllerSession(shared [32]byte, d *Device) (*session, error) {
@@ -77,6 +79,9 @@ func (s *session) Encrypt(r io.Reader) (io.Reader, error) {
 
 // Decrypt returns the decrypted data
 func (s *session) Decrypt(r io.Reader) (io.Reader, error) {
+	s.dmu.Lock()
+	defer s.dmu.Unlock()
+
 	var buf bytes.Buffer
 	for {
 		var length uint16
@@ -99,6 +104,7 @@ func (s *session) Decrypt(r io.Reader) (io.Reader, error) {
 
 		var nonce [8]byte
 		binary.LittleEndian.PutUint64(nonce[:], s.decryptCount)
+		s.decryptCount += 1
 
 		lengthBytes := make([]byte, 2)
 		binary.LittleEndian.PutUint16(lengthBytes, length)
@@ -111,8 +117,6 @@ func (s *session) Decrypt(r io.Reader) (io.Reader, error) {
 			return nil, fmt.Errorf("data encryption failed: %w", err)
 		}
 		buf.Write(decrypted)
-
-		s.decryptCount += 1
 
 		// Finish when all bytes fit in b
 		if length < packetLengthMax {

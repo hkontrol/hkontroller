@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hkontrol/hkontroller/log"
 	"io"
 	"net/http"
 	"sync"
@@ -17,8 +18,8 @@ import (
 )
 
 const dialTimeout = 5 * time.Second
-const reqTimeout = 10 * time.Second
-const emitTimeout = 10 * time.Second
+const reqTimeout = 15 * time.Second
+const emitTimeout = 30 * time.Second
 
 type Device struct {
 	ee emitter.Emitter
@@ -35,10 +36,8 @@ type Device struct {
 
 	discovered bool // discovered mdns?
 
-	nowPairing   bool // pairing in progress?
-	paired       bool // completed /pair-setup?
-	nowVerifying bool // /pair-verify in progress?
-	verified     bool // is connection established after /pair-verify?
+	paired   bool // completed /pair-setup?
+	verified bool // is connection established after /pair-verify?
 
 	closeReason error
 
@@ -65,22 +64,38 @@ func (r *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	//fmt.Println("===== roundTrip =====")
+	//dump, err := httputil.DumpRequest(req, false)
+	//if err == nil {
+	//	fmt.Println(string(dump))
+	//}
+
+	// make response channel
+	r.d.cc.response = make(chan *http.Response)
+	defer close(r.d.cc.response)
+	r.d.cc.resError = make(chan error)
+	defer close(r.d.cc.resError)
+	r.d.cc.wantResponse = true
+	defer func() { r.d.cc.wantResponse = false }()
+
 	err := req.Write(r.d.cc)
 	if err != nil {
 		return nil, err
 	}
 
 	if r.d.cc.inBackground {
-		// TODO select err or response
+		// select err or response
 		select {
 		case res := <-r.d.cc.response:
+			//fmt.Println("case <- d.cc.response")
 			return res, err
 		case err := <-r.d.cc.resError:
+			//fmt.Println("case <- d.cc.resError")
 			return nil, err
 		case <-req.Context().Done():
+			//fmt.Println("case <- req.Context().Done()")
 			return nil, req.Context().Err()
 		}
-		//return res, nil
 	}
 
 	rd := bufio.NewReader(r.d.cc)
@@ -155,6 +170,10 @@ func (d *Device) doGet(url string) (*http.Response, error) {
 }
 
 func (d *Device) emit(topic string, args ...interface{}) {
+	defer func() {
+		// sometimes done channel is closed before emitTimeout
+		recover()
+	}()
 	done := d.ee.Emit(topic, args...)
 	select {
 	case <-done:
@@ -220,14 +239,12 @@ func (d *Device) OffUnpaired(ch <-chan emitter.Event) {
 }
 
 func (d *Device) close(reason error) error {
-	fmt.Printf("device <%s> close call with reason: %v\n", d.Name, reason)
+	log.Debug.Println("device <%s> close call with reason: %v\n", d.Name, reason)
 	d.closeReason = reason
 	var err error
 	if d.cc != nil {
 		d.cc.close()
 	}
-	d.nowPairing = false
-	d.nowVerifying = false
 	d.verified = false
 	d.httpc = nil
 
@@ -251,8 +268,6 @@ func (d *Device) connect() error {
 	if d.cc != nil {
 		d.cc.Conn.Close()
 	}
-	d.nowPairing = false
-	d.nowVerifying = false
 	d.verified = false
 
 	if d.dnssdBrowseEntry == nil || !d.discovered {
@@ -282,7 +297,6 @@ func (d *Device) connect() error {
 }
 
 func (d *Device) startBackgroundRead() {
-	d.cc.inBackground = true
 	go func() {
 		d.cc.loop()
 		d.close(errors.New("stop background read"))
@@ -294,11 +308,6 @@ func (d *Device) IsDiscovered() bool {
 	return d.discovered
 }
 
-// IsPairing returns true if /pair-setup step is running currently
-func (d *Device) IsPairing() bool {
-	return d.nowPairing
-}
-
 // IsPaired returns true if device is paired by this controller.
 // If another client is paired with device it will return false.
 func (d *Device) IsPaired() bool {
@@ -307,11 +316,6 @@ func (d *Device) IsPaired() bool {
 
 func (d *Device) GetPairingInfo() Pairing {
 	return d.pairing
-}
-
-// IsVerifying returns true if /pair-verify step is running currently
-func (d *Device) IsVerifying() bool {
-	return d.nowVerifying
 }
 
 // IsVerified returns true if /pair-verify step was completed by this controller.

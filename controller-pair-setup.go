@@ -269,8 +269,6 @@ func (d *Device) pairSetupM5(clientSession *pairSetupClientSession) error {
 }
 
 func (d *Device) PairSetup(pin string) error {
-	d.nowPairing = true
-	defer func() { d.nowPairing = false }()
 
 	if d.cc == nil || d.cc.closed {
 		err := d.connect()
