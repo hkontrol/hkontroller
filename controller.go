@@ -82,6 +82,10 @@ func (c *Controller) putDevice(dd *Device) {
 	go func() {
 		for range devUnpairedCh {
 			c.st.DeletePairing(dd.pairing.Id)
+			dd.pairing = Pairing{}
+			dd.paired = false
+			dd.verified = false
+
 			c.mu.Lock()
 			dd.close(errors.New("device unpaired"))
 			// if not paired and not discovered,
