@@ -266,9 +266,8 @@ func (d *Device) Close() error {
 func (d *Device) connect() error {
 
 	if d.cc != nil {
-		d.cc.Conn.Close()
+		d.close(errors.New("close on reconnect"))
 	}
-	d.verified = false
 
 	if d.dnssdBrowseEntry == nil || !d.discovered {
 		d.emit("error", errors.New("not discovered"))

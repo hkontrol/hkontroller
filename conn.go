@@ -253,6 +253,7 @@ func (c *conn) loop() {
 		if err != nil {
 			log.Debug.Println("error reading from connection: ", err)
 			c.close()
+			return
 		}
 		//fmt.Println("---")
 		//fmt.Println("rd.Peek: ", string(b))
@@ -263,7 +264,7 @@ func (c *conn) loop() {
 			res, err := http.ReadResponse(rb, nil)
 			if err != nil {
 				c.close()
-				continue
+				return
 			}
 
 			all, err := io.ReadAll(res.Body)
@@ -284,7 +285,6 @@ func (c *conn) loop() {
 			res, err := http.ReadResponse(rd, nil)
 			if err != nil {
 				log.Debug.Println("response error: ", err)
-				c.close()
 				if c.wantResponse {
 					c.resError <- err
 				}
@@ -301,7 +301,6 @@ func (c *conn) loop() {
 			res.Body.Close()
 			if err != nil {
 				log.Debug.Println("response body read error: ", err)
-				c.close()
 				if c.wantResponse {
 					c.resError <- err
 				}
