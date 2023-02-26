@@ -35,7 +35,7 @@ func (d *Device) PairVerify() error {
 	if !d.paired {
 		return errors.New("pair device before verifying")
 	}
-	if d.cc == nil || d.cc.closed {
+	if d.cc == nil || d.cc.closed || d.verified {
 		err := d.connect()
 		if err != nil {
 			return err
