@@ -143,7 +143,8 @@ type conn struct {
 	readBuf   io.Reader
 	bufReader *bufio.Reader
 
-	inBackground bool
+	inBackground   bool
+	backgroundStop chan interface{}
 
 	onEvent func(*http.Response) // EVENT callback, when characteristic value updated
 
@@ -167,7 +168,6 @@ func newConn(c net.Conn) *conn {
 
 func (c *conn) close() {
 	c.closed = true
-	c.inBackground = false
 	c.Conn.Close()
 }
 
@@ -246,13 +246,21 @@ func (c *conn) Read(b []byte) (int, error) {
 }
 
 func (c *conn) loop() {
+	c.backgroundStop = make(chan interface{})
+	defer func() {
+		c.backgroundStop <- struct {
+		}{}
+		close(c.backgroundStop)
+	}()
 	c.inBackground = true
+	defer func() {
+		c.inBackground = false
+	}()
 	rd := bufio.NewReader(c)
 	for !c.closed {
 		b, err := rd.Peek(len(eventHeader)) // len of EVENT string
 		if err != nil {
 			log.Debug.Println("error reading from connection: ", err)
-			c.close()
 			return
 		}
 		//fmt.Println("---")
@@ -263,7 +271,6 @@ func (c *conn) loop() {
 
 			res, err := http.ReadResponse(rb, nil)
 			if err != nil {
-				c.close()
 				return
 			}
 

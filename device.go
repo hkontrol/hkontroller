@@ -244,6 +244,10 @@ func (d *Device) close(reason error) error {
 	var err error
 	if d.cc != nil {
 		d.cc.close()
+		if d.verified {
+			<-d.cc.backgroundStop
+		}
+		d.cc = nil
 	}
 	d.verified = false
 	d.httpc = nil
