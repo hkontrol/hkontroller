@@ -2,18 +2,14 @@ package hkontroller
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
-	"io"
-	"time"
-
 	"github.com/hkontrol/hkontroller/chacha20poly1305"
 	"github.com/hkontrol/hkontroller/curve25519"
 	"github.com/hkontrol/hkontroller/ed25519"
 	"github.com/hkontrol/hkontroller/hkdf"
-	"github.com/hkontrol/hkontroller/log"
 	"github.com/hkontrol/hkontroller/tlv8"
+	"io"
 )
 
 type pairVerifyM1Payload struct {
@@ -35,7 +31,10 @@ func (d *Device) PairVerify() error {
 	if !d.paired {
 		return errors.New("pair device before verifying")
 	}
-	if d.cc == nil || d.cc.closed || d.verified {
+	if d.verified {
+		d.close(errors.New("reconnect"))
+	}
+	if d.cc == nil || d.cc.closed {
 		err := d.connect()
 		if err != nil {
 			return err
@@ -210,116 +209,116 @@ func (d *Device) PairVerify() error {
 // then establish encrypted connection
 // that should automatically reconnect in case of failure.
 // If pin argument is empty pair-setup step is skipped.
-func (d *Device) PairSetupAndVerify(ctx context.Context, pin string, retryTimeout time.Duration) error {
-	var err error
-
-	if pin != "" {
-		// pair-setup should be done in any case
-		if !d.paired {
-			err = d.PairSetup(pin)
-		}
-		if err != nil {
-			return err
-		}
-	}
-
-	// then encrypted channel should be persisted
-	go d.pairVerifyPersist(ctx, retryTimeout)
-
-	verifiedEv := d.OnVerified()
-	unpairedEv := d.OnUnpaired()
-	lostEv := d.OnLost()
-	defer func() {
-		d.OffVerified(verifiedEv)
-		d.OffUnpaired(unpairedEv)
-		d.OffLost(lostEv)
-	}()
-	select {
-	case <-verifiedEv:
-		return nil
-	case <-lostEv:
-		return errors.New("device lost")
-	case <-unpairedEv:
-		return errors.New("unpaired")
-	}
-}
+//func (d *Device) PairSetupAndVerify(ctx context.Context, pin string, retryTimeout time.Duration) error {
+//	var err error
+//
+//	if pin != "" {
+//		// pair-setup should be done in any case
+//		if !d.paired {
+//			err = d.PairSetup(pin)
+//		}
+//		if err != nil {
+//			return err
+//		}
+//	}
+//
+//	// then encrypted channel should be persisted
+//	go d.pairVerifyPersist(ctx, retryTimeout)
+//
+//	verifiedEv := d.OnVerified()
+//	unpairedEv := d.OnUnpaired()
+//	lostEv := d.OnLost()
+//	defer func() {
+//		d.OffVerified(verifiedEv)
+//		d.OffUnpaired(unpairedEv)
+//		d.OffLost(lostEv)
+//	}()
+//	select {
+//	case <-verifiedEv:
+//		return nil
+//	case <-lostEv:
+//		return errors.New("device lost")
+//	case <-unpairedEv:
+//		return errors.New("unpaired")
+//	}
+//}
 
 // pairVerifyPersist establish encrypted connection with auto-reconnect.
 // Connection broke if device is unpaired. May be cancelled by context as well.
-func (d *Device) pairVerifyPersist(ctx context.Context, retryTimeout time.Duration) {
-	newCtx, cancel := context.WithCancel(ctx)
-	d.CancelPersistConnection = cancel
-	errorEv := d.OnError()
-	unpairedEv := d.OnUnpaired()
-	closedEv := d.OnClose()
-	lostEv := d.OnLost() // mdns lost
-	defer func() {
-		d.OffError(errorEv)
-		d.OffClose(closedEv)
-		d.OffUnpaired(unpairedEv)
-		d.OffLost(lostEv)
-	}()
-	for {
-		go func() {
-			if !d.discovered || d.dnssdBrowseEntry == nil {
-				//d.emit("lost")
-				return
-			}
-			if d.paired && !d.verified {
-				err := d.PairVerify()
-				if err != nil {
-					// just emit error in this case
-					// sometimes error may occur if connection was broken, etc
-					// so no need to unpair
-					d.emit("error", err)
-					return
-				}
-			} else if d.paired && d.verified {
-				// to catch later
-				d.emit("verified")
-			}
-		}()
-
-		// catch events
-		select {
-		case ev := <-errorEv:
-			log.Debug.Println("error event")
-			if len(ev.Args) > 0 {
-				// check error - if it's protocol error, e.g. invalid signature, then return err
-				if err, ok := ev.Args[0].(error); ok {
-					var pSetupErr *PairSetupError
-					var pVerifyErr *PairVerifyError
-					if errors.As(err, &pSetupErr) || errors.As(err, &pVerifyErr) {
-						d.close(err)
-						return
-					}
-				}
-			}
-			time.Sleep(retryTimeout)
-			// reconnect in new iteration
-			continue
-		case <-closedEv:
-			log.Debug.Println("close event")
-			select {
-			case <-time.After(retryTimeout):
-				// connection was closed, try to reconnect
-				continue
-			case <-lostEv:
-				// connection was closed and device is not advertising itself no more
-				log.Debug.Println("lost event")
-				d.close(errors.New("lost event"))
-				return
-			}
-		case <-unpairedEv:
-			d.CancelPersistConnection = nil
-			log.Debug.Println("unpaired event")
-			// in this case we don't need connection anymore
-			d.close(errors.New("unpaired event"))
-			return
-		case <-newCtx.Done():
-			d.CancelPersistConnection = nil
-			d.close(newCtx.Err())
-			return
-		}
-	}
-}
+//func (d *Device) pairVerifyPersist(ctx context.Context, retryTimeout time.Duration) {
+//	newCtx, cancel := context.WithCancel(ctx)
+//	d.CancelPersistConnection = cancel
+//	errorEv := d.OnError()
+//	unpairedEv := d.OnUnpaired()
+//	closedEv := d.OnClose()
+//	lostEv := d.OnLost() // mdns lost
+//	defer func() {
+//		d.OffError(errorEv)
+//		d.OffClose(closedEv)
+//		d.OffUnpaired(unpairedEv)
+//		d.OffLost(lostEv)
+//	}()
+//	for {
+//		go func() {
+//			if !d.discovered || d.dnssdBrowseEntry == nil {
+//				//d.emit("lost")
+//				return
+//			}
+//			if d.paired && !d.verified {
+//				err := d.PairVerify()
+//				if err != nil {
+//					// just emit error in this case
+//					// sometimes error may occur if connection was broken, etc
+//					// so no need to unpair
+//					d.emit("error", err)
+//					return
+//				}
+//			} else if d.paired && d.verified {
+//				// to catch later
+//				d.emit("verified")
+//			}
+//		}()
+//
+//		// catch events
+//		select {
+//		case ev := <-errorEv:
+//			log.Debug.Println("error event")
+//			if len(ev.Args) > 0 {
+//				// check error - if it's protocol error, e.g. invalid signature, then return err
+//				if err, ok := ev.Args[0].(error); ok {
+//					var pSetupErr *PairSetupError
+//					var pVerifyErr *PairVerifyError
+//					if errors.As(err, &pSetupErr) || errors.As(err, &pVerifyErr) {
+//						d.close(err)
+//						return
+//					}
+//				}
+//			}
+//			time.Sleep(retryTimeout)
+//			// reconnect in new iteration
+//			continue
+//		case <-closedEv:
+//			log.Debug.Println("close event")
+//			select {
+//			case <-time.After(retryTimeout):
+//				// connection was closed, try to reconnect
+//				continue
+//			case <-lostEv:
+//				// connection was closed and device is not advertising itself no more
+//				log.Debug.Println("lost event")
+//				d.close(errors.New("lost event"))
+//				return
+//			}
+//		case <-unpairedEv:
+//			d.CancelPersistConnection = nil
+//			log.Debug.Println("unpaired event")
+//			// in this case we don't need connection anymore
+//			d.close(errors.New("unpaired event"))
+//			return
+//		case <-newCtx.Done():
+//			d.CancelPersistConnection = nil
+//			d.close(newCtx.Err())
+//			return
+//		}
+//	}
+//}
