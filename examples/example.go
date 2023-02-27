@@ -2,14 +2,11 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
+	"github.com/hkontrol/hkontroller"
 	"os"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/hkontrol/hkontroller"
 )
 
 func main() {
@@ -34,8 +31,7 @@ func main() {
 	discoverCh, lostCh := c.StartDiscovery()
 
 	verify := func(d *hkontroller.Device) {
-		ctx := context.Background()
-		err := d.PairSetupAndVerify(ctx, "pin doesn't matter if already paired", 5*time.Second)
+		err := d.PairVerify()
 		if err != nil {
 			writeln("pair-verify err: ", err)
 			return
