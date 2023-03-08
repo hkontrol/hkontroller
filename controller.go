@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/brutella/dnssd"
-	_ "github.com/brutella/dnssd/log"
+	"github.com/hkontrol/dnssd"
+	_ "github.com/hkontrol/dnssd/log"
 )
 
 type pairSetupPayload struct {
