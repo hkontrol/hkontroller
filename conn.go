@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/brutella/dnssd"
+	"github.com/hkontrol/dnssd"
 	"github.com/hkontrol/hkontroller/log"
 	"io"
 	"net"
@@ -248,8 +248,6 @@ func (c *conn) Read(b []byte) (int, error) {
 func (c *conn) loop() {
 	c.backgroundStop = make(chan interface{})
 	defer func() {
-		c.backgroundStop <- struct {
-		}{}
 		close(c.backgroundStop)
 	}()
 	c.inBackground = true
