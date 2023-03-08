@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/brutella/dnssd"
+	"github.com/hkontrol/dnssd"
 	"github.com/olebedev/emitter"
 )
 
@@ -40,8 +40,6 @@ type Device struct {
 	verified bool // is connection established after /pair-verify?
 
 	closeReason error
-
-	CancelPersistConnection context.CancelFunc
 
 	cc    *conn
 	ss    *session
@@ -201,18 +199,6 @@ func (d *Device) OnLost() <-chan emitter.Event {
 func (d *Device) OffLost(ch <-chan emitter.Event) {
 	d.ee.Off("lost", ch)
 }
-func (d *Device) OnConnect() <-chan emitter.Event {
-	return d.ee.On("connect")
-}
-func (d *Device) OffConnect(ch <-chan emitter.Event) {
-	d.ee.Off("connect", ch)
-}
-func (d *Device) OnError() <-chan emitter.Event {
-	return d.ee.On("error")
-}
-func (d *Device) OffError(ch <-chan emitter.Event) {
-	d.ee.Off("error", ch)
-}
 func (d *Device) OnClose() <-chan emitter.Event {
 	return d.ee.On("close")
 }
@@ -245,7 +231,8 @@ func (d *Device) close(reason error) error {
 	if d.cc != nil {
 		d.cc.close()
 		if d.verified {
-			<-d.cc.backgroundStop
+			for range d.cc.backgroundStop {
+			}
 		}
 		d.cc = nil
 	}
@@ -261,9 +248,6 @@ func (d *Device) close(reason error) error {
 }
 
 func (d *Device) Close() error {
-	if d.CancelPersistConnection != nil {
-		d.CancelPersistConnection()
-	}
 	return d.close(errors.New("manual close "))
 }
 
@@ -274,13 +258,11 @@ func (d *Device) connect() error {
 	}
 
 	if d.dnssdBrowseEntry == nil || !d.discovered {
-		d.emit("error", errors.New("not discovered"))
 		return errors.New("not discovered")
 	}
 
 	dial, err := dialServiceInstance(context.Background(), d.dnssdBrowseEntry, dialTimeout)
 	if err != nil {
-		d.emit("error", err)
 		return err
 	}
 
@@ -294,14 +276,13 @@ func (d *Device) connect() error {
 
 	d.closeReason = nil
 
-	d.emit("connect")
-
 	return nil
 }
 
 func (d *Device) startBackgroundRead() {
 	go func() {
 		d.cc.loop()
+		log.Debug.Println("background read: loop stopped")
 		d.close(errors.New("stop background read"))
 	}()
 }
